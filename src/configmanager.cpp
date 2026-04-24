@@ -296,6 +296,11 @@ bool ConfigManager::load()
 	booleans[Boolean::REPLACE_KICK_ON_LOGIN] = getGlobalBoolean(L, "replaceKickOnLogin", true);
 	booleans[Boolean::ALLOW_CLONES] = getGlobalBoolean(L, "allowClones", false);
 	booleans[Boolean::ALLOW_WALKTHROUGH] = getGlobalBoolean(L, "allowWalkthrough", true);
+	booleans[Boolean::TOGGLE_EXPERT_PVP] = getGlobalBoolean(L, "toggleExpertPvp", true);
+	booleans[Boolean::EXPERT_PVP_CANWALKTHROUGHOTHERPLAYERS] =
+	    getGlobalBoolean(L, "expertPvpCanWalkThroughOtherPlayers", false);
+	booleans[Boolean::EXPERT_PVP_CANWALKTHROUGHMAGICWALLS] =
+	    getGlobalBoolean(L, "expertPvpCanWalkThroughMagicWalls", false);
 	booleans[Boolean::MARKET_PREMIUM] = getGlobalBoolean(L, "premiumToCreateMarketOffer", true);
 	booleans[Boolean::EMOTE_SPELLS] = getGlobalBoolean(L, "emoteSpells", false);
 	booleans[Boolean::STAMINA_SYSTEM] = getGlobalBoolean(L, "staminaSystem", true);

@@ -16,6 +16,14 @@
 
 extern Game g_game;
 
+namespace {
+bool isExpertPvpEnabled()
+{
+	return ConfigManager::getBoolean(ConfigManager::TOGGLE_EXPERT_PVP) ||
+	       g_game.getWorldType() == WORLD_TYPE_PVP_ENFORCED;
+}
+}
+
 std::vector<Tile*> getList(const MatrixArea& area, const Position& targetPos, const Direction dir)
 {
 	auto casterPos = getNextPosition(dir, targetPos);
@@ -219,7 +227,11 @@ ReturnValue Combat::canTargetCreature(Player* attacker, Creature* target)
 			return RETURNVALUE_YOUMAYNOTATTACKTHISPLAYER;
 		}
 
-		if (attacker->isSecureModeEnabled() && !Combat::isInPvpZone(attacker, target) &&
+		if (isExpertPvpEnabled()) {
+			if (!attacker->canCombat(target)) {
+				return RETURNVALUE_ADJUSTYOURCOMBAT;
+			}
+		} else if (attacker->isSecureModeEnabled() && !Combat::isInPvpZone(attacker, target) &&
 		    attacker->getSkullClient(target->getPlayer()) == SKULL_NONE) {
 			return RETURNVALUE_TURNSECUREMODETOATTACKUNMARKEDPLAYERS;
 		}
@@ -329,10 +341,14 @@ ReturnValue Combat::canDoCombat(Creature* attacker, Creature* target)
 			           !targetPlayerTile->hasFlag(TILESTATE_NOPVPZONE | TILESTATE_PROTECTIONZONE)) {
 				return RETURNVALUE_ACTIONNOTPERMITTEDINANOPVPZONE;
 			}
+
+			if (!attackerPlayer->canCombat(target)) {
+				return RETURNVALUE_ADJUSTYOURCOMBAT;
+			}
 		}
 
 		if (attacker->isSummon()) {
-			if (const Player* masterAttackerPlayer = attacker->getMaster()->getPlayer()) {
+			if (const Player* masterAttackerPlayer = g_game.getOwnerPlayer(attacker)) {
 				if (masterAttackerPlayer->hasFlag(PlayerFlag_CannotAttackPlayer)) {
 					return RETURNVALUE_YOUMAYNOTATTACKTHISPLAYER;
 				}
@@ -344,6 +360,10 @@ ReturnValue Combat::canDoCombat(Creature* attacker, Creature* target)
 				if (isProtected(masterAttackerPlayer, targetPlayer)) {
 					return RETURNVALUE_YOUMAYNOTATTACKTHISPLAYER;
 				}
+
+				if (!masterAttackerPlayer->canCombat(target)) {
+					return RETURNVALUE_ADJUSTYOURCOMBAT;
+				}
 			}
 		}
 	} else if (target->getMonster()) {
@@ -352,10 +372,30 @@ ReturnValue Combat::canDoCombat(Creature* attacker, Creature* target)
 				return RETURNVALUE_YOUMAYNOTATTACKTHISCREATURE;
 			}
 
-			if (target->isSummon() && target->getMaster()->getPlayer() && target->getZone() == ZONE_NOPVP) {
-				return RETURNVALUE_ACTIONNOTPERMITTEDINANOPVPZONE;
+			if (Player* ownerPlayer = g_game.getOwnerPlayer(target)) {
+				if (target->getZone() == ZONE_NOPVP) {
+					return RETURNVALUE_ACTIONNOTPERMITTEDINANOPVPZONE;
+				}
+
+				if (ownerPlayer != attackerPlayer && !attackerPlayer->canCombat(target)) {
+					return RETURNVALUE_ADJUSTYOURCOMBAT;
+				}
+			}
+		} else if (Player* attackerOwner = g_game.getOwnerPlayer(attacker)) {
+			if (Player* targetOwner = g_game.getOwnerPlayer(target)) {
+				if (target->getZone() == ZONE_NOPVP) {
+					return RETURNVALUE_ACTIONNOTPERMITTEDINANOPVPZONE;
+				}
+
+				if (targetOwner != attackerOwner && !attackerOwner->canCombat(target)) {
+					return RETURNVALUE_ADJUSTYOURCOMBAT;
+				}
 			}
 		} else if (const Monster* attackerMonster = attacker->getMonster()) {
+			if (target->isSummon() && g_game.getOwnerPlayer(target) && target->getZone() == ZONE_NOPVP) {
+				return RETURNVALUE_ACTIONNOTPERMITTEDINANOPVPZONE;
+			}
+
 			if (attackerMonster->isOpponent(target)) {
 				return g_events->eventCreatureOnTargetCombat(attacker, target);
 			}
@@ -373,14 +413,14 @@ ReturnValue Combat::canDoCombat(Creature* attacker, Creature* target)
 	}
 
 	if (g_game.getWorldType() == WORLD_TYPE_NO_PVP) {
-		if (attacker->getPlayer() || (attacker->isSummon() && attacker->getMaster()->getPlayer())) {
+		if (attacker->getPlayer() || g_game.getOwnerPlayer(attacker)) {
 			if (target->getPlayer()) {
 				if (!isInPvpZone(attacker, target)) {
 					return RETURNVALUE_YOUMAYNOTATTACKTHISPLAYER;
 				}
 			}
 
-			if (target->isSummon() && target->getMaster()->getPlayer()) {
+			if (g_game.getOwnerPlayer(target)) {
 				if (!isInPvpZone(attacker, target)) {
 					return RETURNVALUE_YOUMAYNOTATTACKTHISCREATURE;
 				}
@@ -589,12 +629,7 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 		}
 
 		if (caster) {
-			Player* casterPlayer;
-			if (caster->isSummon()) {
-				casterPlayer = caster->getMaster()->getPlayer();
-			} else {
-				casterPlayer = caster->getPlayer();
-			}
+			Player* casterPlayer = g_game.getOwnerPlayer(caster);
 
 			if (casterPlayer) {
 				if (g_game.getWorldType() == WORLD_TYPE_NO_PVP || tile->hasFlag(TILESTATE_NOPVPZONE)) {
@@ -616,6 +651,12 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 		if (caster) {
 			itemPtr->setOwner(caster->getID());
 			itemPtr->setInstanceID(caster->getInstanceID());
+
+			if (MagicField* field = itemPtr->getMagicField()) {
+				if (Player* casterPlayer = g_game.getOwnerPlayer(caster)) {
+					field->setPvpMode(casterPlayer->getPvpMode());
+				}
+			}
 		}
 
 		ReturnValue ret = g_game.internalAddItem(tile, itemPtr.get());
@@ -1578,10 +1619,51 @@ void AreaCombat::setupExtArea(const std::vector<uint32_t>& vec, uint32_t rows)
 
 //**********************************************************//
 
+bool MagicField::isAggressive(const Player* player) const
+{
+	if (!player || !isExpertPvpEnabled()) {
+		return true;
+	}
+
+	Player* attacker = g_game.getOwnerPlayer(getOwner());
+	if (!attacker || attacker == player) {
+		return true;
+	}
+
+	if (attacker->isPartner(player) || attacker->isGuildMate(player)) {
+		return false;
+	}
+
+	if (g_game.getWorldType() == WORLD_TYPE_PVP_ENFORCED) {
+		return true;
+	}
+
+	switch (pvpMode) {
+		case PVP_MODE_WHITE_HAND:
+			return attacker->isAggressiveCreature(player, true, createTime);
+
+		case PVP_MODE_YELLOW_HAND:
+			return attacker->getSkullClient(player) != SKULL_NONE;
+
+		case PVP_MODE_RED_FIST:
+			return true;
+
+		case PVP_MODE_DOVE:
+		default:
+			return attacker->isAggressiveCreature(player, false, createTime);
+	}
+}
+
 void MagicField::onStepInField(Creature* creature)
 {
 	const ItemType& it = items[getID()];
 	if (it.conditionDamage) {
+		if (Player* targetPlayer = creature->getPlayer()) {
+			if (!isAggressive(targetPlayer)) {
+				return;
+			}
+		}
+
 		auto conditionCopy = it.conditionDamage->clone();
 		uint32_t ownerId = getOwner();
 		if (ownerId) {
@@ -1590,7 +1672,7 @@ void MagicField::onStepInField(Creature* creature)
 			if (g_game.getWorldType() == WORLD_TYPE_NO_PVP || getTile()->hasFlag(TILESTATE_NOPVPZONE)) {
 				Creature* owner = g_game.getCreatureByID(ownerId);
 				if (owner) {
-					if (owner->getPlayer() || (owner->isSummon() && owner->getMaster()->getPlayer())) {
+					if (g_game.getOwnerPlayer(owner)) {
 						harmfulField = false;
 					}
 				}
@@ -1598,7 +1680,7 @@ void MagicField::onStepInField(Creature* creature)
 
 			Player* targetPlayer = creature->getPlayer();
 			if (targetPlayer) {
-				Player* attackerPlayer = g_game.getPlayerByID(ownerId);
+				Player* attackerPlayer = g_game.getOwnerPlayer(ownerId);
 				if (attackerPlayer) {
 					if (Combat::isProtected(attackerPlayer, targetPlayer)) {
 						harmfulField = false;

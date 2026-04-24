@@ -1914,6 +1914,11 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(FIGHTMODE_BALANCED);
 	registerEnum(FIGHTMODE_DEFENSE);
 
+	registerEnum(PVP_MODE_DOVE);
+	registerEnum(PVP_MODE_WHITE_HAND);
+	registerEnum(PVP_MODE_YELLOW_HAND);
+	registerEnum(PVP_MODE_RED_FIST);
+
 	registerEnum(ITEM_ATTRIBUTE_NONE);
 	registerEnum(ITEM_ATTRIBUTE_ACTIONID);
 	registerEnum(ITEM_ATTRIBUTE_UNIQUEID);
@@ -2331,6 +2336,9 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(RETURNVALUE_YOUCANONLYUSEITONCREATURES);
 	registerEnum(RETURNVALUE_CREATUREISNOTREACHABLE);
 	registerEnum(RETURNVALUE_TURNSECUREMODETOATTACKUNMARKEDPLAYERS);
+	registerEnum(RETURNVALUE_YOUCANNOTPASSTHROUGHAGGRESSIVEPLAYERS);
+	registerEnum(RETURNVALUE_YOUCANNOTPASSTHROUGHAGGRESSIVECREATURES);
+	registerEnum(RETURNVALUE_ADJUSTYOURCOMBAT);
 	registerEnum(RETURNVALUE_YOUNEEDPREMIUMACCOUNT);
 	registerEnum(RETURNVALUE_YOUNEEDTOLEARNTHISSPELL);
 	registerEnum(RETURNVALUE_YOURVOCATIONCANNOTUSETHISSPELL);
@@ -2465,6 +2473,10 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::FREE_PREMIUM);
 	registerEnumIn("configKeys", ConfigManager::REPLACE_KICK_ON_LOGIN);
 	registerEnumIn("configKeys", ConfigManager::ALLOW_CLONES);
+	registerEnumIn("configKeys", ConfigManager::ALLOW_WALKTHROUGH);
+	registerEnumIn("configKeys", ConfigManager::TOGGLE_EXPERT_PVP);
+	registerEnumIn("configKeys", ConfigManager::EXPERT_PVP_CANWALKTHROUGHOTHERPLAYERS);
+	registerEnumIn("configKeys", ConfigManager::EXPERT_PVP_CANWALKTHROUGHMAGICWALLS);
 	registerEnumIn("configKeys", ConfigManager::BIND_ONLY_GLOBAL_ADDRESS);
 	registerEnumIn("configKeys", ConfigManager::OPTIMIZE_DATABASE);
 	registerEnumIn("configKeys", ConfigManager::MARKET_PREMIUM);

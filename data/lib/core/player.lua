@@ -135,6 +135,9 @@ function Player.sendFightMode(self)
 	msg:addByte(self:getFightMode())
 	msg:addByte(self:isChasingEnabled() and 1 or 0)
 	msg:addByte(self:isSecureModeEnabled() and 1 or 0)
+	if self:isUsingOtcV8() then
+		msg:addByte(self:getPvpMode())
+	end
 	msg:sendToPlayer(self)
 	return true
 end

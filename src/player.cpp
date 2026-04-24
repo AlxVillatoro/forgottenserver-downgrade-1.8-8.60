@@ -34,6 +34,20 @@ extern Vocations g_vocations;
 namespace {
 void trimString(std::string& str) { boost::algorithm::trim(str); }
 
+bool isExpertPvpEnabled()
+{
+	return ConfigManager::getBoolean(ConfigManager::TOGGLE_EXPERT_PVP) ||
+	       g_game.getWorldType() == WORLD_TYPE_PVP_ENFORCED;
+}
+
+PvpMode_t normalizePvpMode(PvpMode_t mode)
+{
+	if (mode > PVP_MODE_RED_FIST) {
+		return PVP_MODE_DOVE;
+	}
+	return mode;
+}
+
 // std::string asLowerCaseString(const std::string& str) { return boost::algorithm::to_lower_copy<std::string>(str); }
 
 // void toLowerCaseString(std::string& str) { boost::algorithm::to_lower(str); }
@@ -814,6 +828,49 @@ bool Player::canSeeCreature(const Creature* creature) const
 	return true;
 }
 
+bool Player::canCombat(const Creature* creature) const
+{
+	if (!isExpertPvpEnabled()) {
+		return true;
+	}
+
+	if (!creature) {
+		return false;
+	}
+
+	const Player* targetPlayer = creature->getPlayer();
+	if (!targetPlayer) {
+		targetPlayer = g_game.getOwnerPlayer(creature);
+	}
+
+	if (!targetPlayer || targetPlayer == this) {
+		return true;
+	}
+
+	if (targetPlayer->isAccessPlayer() || isPartner(targetPlayer) || isGuildMate(targetPlayer)) {
+		return false;
+	}
+
+	if (g_game.getWorldType() == WORLD_TYPE_PVP_ENFORCED) {
+		return true;
+	}
+
+	switch (pvpMode) {
+		case PVP_MODE_WHITE_HAND:
+			return isAggressiveCreature(creature, true);
+
+		case PVP_MODE_YELLOW_HAND:
+			return getSkullClient(targetPlayer) != SKULL_NONE;
+
+		case PVP_MODE_RED_FIST:
+			return true;
+
+		case PVP_MODE_DOVE:
+		default:
+			return isAggressiveCreature(creature, false);
+	}
+}
+
 bool Player::canSeeGhostMode(const Creature*) const { return group->access; }
 
 bool Player::canWalkthrough(const Creature* creature) const
@@ -831,6 +888,11 @@ bool Player::canWalkthrough(const Creature* creature) const
 		return true;
 	}
 	if (!player || !getBoolean(ConfigManager::ALLOW_WALKTHROUGH)) {
+		return false;
+	}
+
+	if (isExpertPvpEnabled() && !getBoolean(ConfigManager::EXPERT_PVP_CANWALKTHROUGHOTHERPLAYERS) &&
+	    (isAggressiveCreature(player, true) || player->isAggressiveCreature(this, true))) {
 		return false;
 	}
 
@@ -860,6 +922,11 @@ bool Player::canWalkthroughEx(const Creature* creature) const
 
 	const Player* player = creature->getPlayer();
 	if (!player || !getBoolean(ConfigManager::ALLOW_WALKTHROUGH)) {
+		return false;
+	}
+
+	if (isExpertPvpEnabled() && !getBoolean(ConfigManager::EXPERT_PVP_CANWALKTHROUGHOTHERPLAYERS) &&
+	    (isAggressiveCreature(player, true) || player->isAggressiveCreature(this, true))) {
 		return false;
 	}
 
@@ -1424,6 +1491,9 @@ void Player::onRemoveCreature(Creature* creature, bool isLogout)
 				loginPosition = town->getTemplePosition();
 				setInstanceID(0);
 			}
+
+			clearAttacked();
+			clearAttackedBy();
 		}
 
 		if (accountManager != ACCOUNT_MANAGER_NONE) {
@@ -3733,7 +3803,35 @@ void Player::setFightMode(fightMode_t stance, bool chase, bool secure)
 	chaseMode = chase;
 	secureMode = secure;
 
+	if (g_game.getWorldType() == WORLD_TYPE_PVP_ENFORCED) {
+		pvpMode = PVP_MODE_RED_FIST;
+		secureMode = false;
+	} else if (pvpMode == PVP_MODE_RED_FIST) {
+		secureMode = false;
+	}
+
 	g_events->eventPlayerOnFightModeChanged(this, fightMode, chaseMode, secureMode);
+}
+
+void Player::setPvpMode(PvpMode_t mode)
+{
+	mode = normalizePvpMode(mode);
+
+	if (g_game.getWorldType() == WORLD_TYPE_PVP_ENFORCED) {
+		pvpMode = PVP_MODE_RED_FIST;
+		secureMode = false;
+		return;
+	}
+
+	if (mode == PVP_MODE_RED_FIST) {
+		if (g_game.getWorldType() == WORLD_TYPE_NO_PVP || getSkull() == SKULL_BLACK) {
+			return;
+		}
+
+		secureMode = false;
+	}
+
+	pvpMode = mode;
 }
 
 void Player::onWalkAborted()
@@ -3858,6 +3956,7 @@ void Player::onEndCondition(ConditionType_t type)
 		onIdleStatus();
 		pzLocked = false;
 		clearAttacked();
+		clearAttackedBy();
 
 		if (getSkull() != SKULL_RED && getSkull() != SKULL_BLACK) {
 			setSkull(SKULL_NONE);
@@ -3927,33 +4026,76 @@ void Player::onAttackedCreature(const std::shared_ptr<Creature>& target, bool ad
 	}
 
 	Player* targetPlayer = target->getPlayer();
-	if (targetPlayer && !isPartner(targetPlayer) && !isGuildMate(targetPlayer)) {
-		if (!pzLocked && g_game.getWorldType() == WORLD_TYPE_PVP_ENFORCED) {
-			pzLocked = true;
-			sendIcons();
+	if (!targetPlayer) {
+		targetPlayer = g_game.getOwnerPlayer(target.get());
+	}
+
+	if (targetPlayer && targetPlayer != this && !isPartner(targetPlayer) && !isGuildMate(targetPlayer)) {
+		const auto lockPz = [this]() {
+			if (!pzLocked) {
+				pzLocked = true;
+				sendIcons();
+			}
+		};
+
+		if (g_game.getWorldType() == WORLD_TYPE_PVP_ENFORCED) {
+			setPvpMode(PVP_MODE_RED_FIST);
+			lockPz();
 		}
 
 		targetPlayer->addInFightTicks();
 
-		if (getSkull() == SKULL_NONE && getSkullClient(targetPlayer) == SKULL_YELLOW) {
-			addAttacked(targetPlayer);
-			targetPlayer->sendCreatureSkull(this);
-		} else {
-			if (!targetPlayer->hasAttacked(this)) {
-				if (!pzLocked && g_game.getWorldType() != WORLD_TYPE_PVP_ENFORCED) {
-					pzLocked = true;
-					sendIcons();
-				}
+		if (isExpertPvpEnabled()) {
+			const bool inPvpZone = Combat::isInPvpZone(this, targetPlayer);
+			const bool inWar = isInWar(targetPlayer);
 
-				if (!Combat::isInPvpZone(this, targetPlayer) && !isInWar(targetPlayer)) {
+			if (pvpMode == PVP_MODE_DOVE || pvpMode == PVP_MODE_WHITE_HAND) {
+				if (!inPvpZone && !inWar && isAggressiveCreature(targetPlayer, pvpMode == PVP_MODE_WHITE_HAND)) {
+					addAttacked(targetPlayer);
+					targetPlayer->sendCreatureSkull(this);
+				}
+			} else {
+				lockPz();
+
+				if (!inPvpZone && !inWar) {
 					addAttacked(targetPlayer);
 
-					if (targetPlayer->getSkull() == SKULL_NONE && getSkull() == SKULL_NONE) {
+					if (pvpMode == PVP_MODE_RED_FIST && targetPlayer->getSkull() == SKULL_NONE &&
+					    getSkull() == SKULL_NONE) {
 						setSkull(SKULL_WHITE);
 					}
 
 					if (getSkull() == SKULL_NONE) {
 						targetPlayer->sendCreatureSkull(this);
+					}
+				}
+			}
+		} else {
+			if (!pzLocked && g_game.getWorldType() == WORLD_TYPE_PVP_ENFORCED) {
+				pzLocked = true;
+				sendIcons();
+			}
+
+			if (getSkull() == SKULL_NONE && getSkullClient(targetPlayer) == SKULL_YELLOW) {
+				addAttacked(targetPlayer);
+				targetPlayer->sendCreatureSkull(this);
+			} else {
+				if (!targetPlayer->hasAttacked(this)) {
+					if (!pzLocked && g_game.getWorldType() != WORLD_TYPE_PVP_ENFORCED) {
+						pzLocked = true;
+						sendIcons();
+					}
+
+					if (!Combat::isInPvpZone(this, targetPlayer) && !isInWar(targetPlayer)) {
+						addAttacked(targetPlayer);
+
+						if (targetPlayer->getSkull() == SKULL_NONE && getSkull() == SKULL_NONE) {
+							setSkull(SKULL_WHITE);
+						}
+
+						if (getSkull() == SKULL_NONE) {
+							targetPlayer->sendCreatureSkull(this);
+						}
 					}
 				}
 			}
@@ -4354,13 +4496,18 @@ Skulls_t Player::getSkullClient(const Creature* creature) const
 	return Creature::getSkullClient(creature);
 }
 
-bool Player::hasAttacked(const Player* attacked) const
+bool Player::hasAttacked(const Player* attacked, int64_t time /* = 0 */) const
 {
 	if (hasFlag(PlayerFlag_NotGainInFight) || !attacked) {
 		return false;
 	}
 
-	return attackedSet.contains(attacked->guid);
+	auto it = attackedSet.find(attacked->guid);
+	if (it == attackedSet.end()) {
+		return false;
+	}
+
+	return time == 0 || it->second <= time;
 }
 
 void Player::addAttacked(const Player* attacked)
@@ -4369,7 +4516,14 @@ void Player::addAttacked(const Player* attacked)
 		return;
 	}
 
-	attackedSet.insert(attacked->guid);
+	attackedSet[attacked->guid] = OTSYS_TIME();
+
+	if (Player* attackedPlayer = g_game.getPlayerByGUID(attacked->guid)) {
+		attackedPlayer->attackedBySet.insert(guid);
+		g_game.updateCreatureSquare(attackedPlayer);
+	}
+
+	g_game.updateCreatureSquare(this);
 }
 
 void Player::removeAttacked(const Player* attacked)
@@ -4381,10 +4535,168 @@ void Player::removeAttacked(const Player* attacked)
 	auto it = attackedSet.find(attacked->guid);
 	if (it != attackedSet.end()) {
 		attackedSet.erase(it);
+
+		if (Player* attackedPlayer = g_game.getPlayerByGUID(attacked->guid)) {
+			attackedPlayer->removeAttackedBy(this);
+			g_game.updateCreatureSquare(attackedPlayer);
+		}
+
+		g_game.updateCreatureSquare(this);
 	}
 }
 
-void Player::clearAttacked() { attackedSet.clear(); }
+void Player::clearAttacked()
+{
+	if (attackedSet.empty()) {
+		return;
+	}
+
+	const auto attackedPlayers = attackedSet;
+	attackedSet.clear();
+
+	for (const auto& [attackedGuid, _] : attackedPlayers) {
+		Player* attackedPlayer = g_game.getPlayerByGUID(attackedGuid);
+		if (!attackedPlayer) {
+			continue;
+		}
+
+		attackedPlayer->removeAttackedBy(this);
+		g_game.updateCreatureSquare(attackedPlayer);
+	}
+
+	g_game.updateCreatureSquare(this);
+}
+
+bool Player::hasAttackedBy(const Player* attacker) const
+{
+	if (!attacker) {
+		return false;
+	}
+
+	return attackedBySet.contains(attacker->guid);
+}
+
+void Player::removeAttackedBy(const Player* attacker)
+{
+	if (!attacker) {
+		return;
+	}
+
+	attackedBySet.erase(attacker->guid);
+}
+
+void Player::clearAttackedBy()
+{
+	if (attackedBySet.empty()) {
+		return;
+	}
+
+	const auto attackers = attackedBySet;
+	attackedBySet.clear();
+
+	for (uint32_t attackerGuid : attackers) {
+		Player* attacker = g_game.getPlayerByGUID(attackerGuid);
+		if (!attacker) {
+			continue;
+		}
+
+		attacker->attackedSet.erase(guid);
+		g_game.updateCreatureSquare(attacker);
+	}
+
+	g_game.updateCreatureSquare(this);
+}
+
+bool Player::hasPvpActivity(const Player* player, bool guildAndParty, int64_t time /* = 0 */) const
+{
+	if (!player) {
+		return false;
+	}
+
+	if (hasAttacked(player, time) || player->hasAttacked(this, time)) {
+		return true;
+	}
+
+	if (!guildAndParty) {
+		return false;
+	}
+
+	auto checkMember = [player, time](const Player* member) {
+		return member && member != player && (member->hasAttacked(player, time) || player->hasAttacked(member, time));
+	};
+
+	if (auto p = party.lock()) {
+		if (checkMember(p->getLeader().get())) {
+			return true;
+		}
+
+		for (const auto& weakMember : p->getMembers()) {
+			if (checkMember(weakMember.lock().get())) {
+				return true;
+			}
+		}
+	}
+
+	if (const auto guild = getGuild()) {
+		for (const Player* member : guild->getMembersOnline()) {
+			if (checkMember(member)) {
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+bool Player::isInPvpSituation() const { return !attackedSet.empty() || !attackedBySet.empty(); }
+
+bool Player::isAggressiveCreature(const Creature* creature, bool guildAndParty, int64_t time /* = 0 */) const
+{
+	if (!creature) {
+		return false;
+	}
+
+	const Player* player = creature->getPlayer();
+	if (!player) {
+		player = g_game.getOwnerPlayer(creature);
+	}
+
+	if (!player || player == this) {
+		return false;
+	}
+
+	return hasPvpActivity(player, guildAndParty, time);
+}
+
+SquareColor_t Player::getCreatureSquare(const Creature* creature) const
+{
+	if (!isExpertPvpEnabled() || !creature) {
+		return SQ_COLOR_NONE;
+	}
+
+	const Player* player = creature->getPlayer();
+	if (!player) {
+		player = g_game.getOwnerPlayer(creature);
+	}
+
+	if (!player || player->isAccessPlayer()) {
+		return SQ_COLOR_NONE;
+	}
+
+	if (player == this) {
+		return isInPvpSituation() ? SQ_COLOR_YELLOW : SQ_COLOR_NONE;
+	}
+
+	if (isAggressiveCreature(creature, false)) {
+		return SQ_COLOR_YELLOW;
+	}
+
+	if (player->isInPvpSituation()) {
+		return isAggressiveCreature(creature, true) ? SQ_COLOR_ORANGE : SQ_COLOR_BROWN;
+	}
+
+	return SQ_COLOR_NONE;
+}
 
 void Player::addUnjustifiedDead(const Player* attacked)
 {

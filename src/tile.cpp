@@ -638,6 +638,30 @@ ReturnValue Tile::queryAdd(int32_t, const Thing& thing, uint32_t, uint32_t flags
 		if (!hasBitSet(FLAG_IGNOREBLOCKITEM, flags)) {
 			// If the FLAG_IGNOREBLOCKITEM bit isn't set we dont have to iterate every single item
 			if (hasFlag(TILESTATE_BLOCKSOLID) || hasInstancedProperty(CONST_PROP_BLOCKSOLID, actorInstanceID)) {
+				if (const Player* player = creature->getPlayer()) {
+					MagicField* field = getFieldItem(actorInstanceID);
+					if (field && field->isBlocking() && !field->isAggressive(player) &&
+					    ConfigManager::getBoolean(ConfigManager::EXPERT_PVP_CANWALKTHROUGHMAGICWALLS)) {
+						bool onlyPvpFieldBlocks = !(ground && ground->hasProperty(CONST_PROP_BLOCKSOLID));
+						if (const auto items = getItemList()) {
+							for (const auto& item : *items) {
+								if (item->getInstanceID() != 0 && item->getInstanceID() != actorInstanceID) {
+									continue;
+								}
+
+								if (item.get() != field && item->hasProperty(CONST_PROP_BLOCKSOLID)) {
+									onlyPvpFieldBlocks = false;
+									break;
+								}
+							}
+						}
+
+						if (onlyPvpFieldBlocks) {
+							return RETURNVALUE_NOERROR;
+						}
+					}
+				}
+
 				return RETURNVALUE_NOTENOUGHROOM;
 			}
 		} else {

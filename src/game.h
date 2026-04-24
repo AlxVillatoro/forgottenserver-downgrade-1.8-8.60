@@ -146,6 +146,8 @@ public:
 	 * \returns A Creature pointer to the creature
 	 */
 	[[nodiscard]] Creature* getCreatureByID(uint32_t id);
+	[[nodiscard]] Player* getOwnerPlayer(const Creature* creature);
+	[[nodiscard]] Player* getOwnerPlayer(uint32_t creatureId);
 
 	/**
 	 * Returns a monster based on the unique creature identifier
@@ -462,6 +464,7 @@ public:
 	void changeLight(const Creature* creature);
 	void updateCreatureSkull(const Creature* creature);
 	void updatePlayerShield(Player* player);
+	void updateCreatureSquare(const Creature* creature);
 	void updateCreatureWalkthrough(const Creature* creature);
 	void updateCreatureEmblem(Creature* creature);
 	void updateKnownCreature(const Creature* creature);

@@ -1186,6 +1186,15 @@ std::string_view getReturnMessage(ReturnValue value)
 		case RETURNVALUE_TURNSECUREMODETOATTACKUNMARKEDPLAYERS:
 			return "Turn secure mode off if you really want to attack unmarked players.";
 
+		case RETURNVALUE_YOUCANNOTPASSTHROUGHAGGRESSIVEPLAYERS:
+			return "You cannot pass through aggressive players.";
+
+		case RETURNVALUE_YOUCANNOTPASSTHROUGHAGGRESSIVECREATURES:
+			return "You cannot pass through aggressive creatures.";
+
+		case RETURNVALUE_ADJUSTYOURCOMBAT:
+			return "You need to adjust your PvP Mode.";
+
 		case RETURNVALUE_YOUNEEDPREMIUMACCOUNT:
 			return "You need a premium account.";
 

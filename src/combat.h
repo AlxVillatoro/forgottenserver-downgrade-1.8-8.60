@@ -170,9 +170,12 @@ public:
 		return 0;
 	}
 	void onStepInField(Creature* creature);
+	bool isAggressive(const Player* player) const;
+	void setPvpMode(PvpMode_t mode) { pvpMode = mode; }
 
 private:
 	int64_t createTime;
+	PvpMode_t pvpMode = PVP_MODE_DOVE;
 };
 
 #endif

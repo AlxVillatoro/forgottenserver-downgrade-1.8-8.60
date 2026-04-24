@@ -103,6 +103,7 @@ void Creature::setSkull(Skulls_t newSkull)
 {
 	skull = newSkull;
 	g_game.updateCreatureSkull(this);
+	g_game.updateCreatureSquare(this);
 }
 
 void Creature::setGuildEmblem(GuildEmblems_t newEmblem)

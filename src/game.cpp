@@ -390,6 +390,28 @@ Creature* Game::getCreatureByID(uint32_t id)
 	return nullptr;
 }
 
+Player* Game::getOwnerPlayer(const Creature* creature)
+{
+	if (!creature) {
+		return nullptr;
+	}
+
+	if (Player* player = const_cast<Creature*>(creature)->getPlayer()) {
+		return player;
+	}
+
+	if (auto master = creature->getMaster()) {
+		return getOwnerPlayer(master.get());
+	}
+
+	return nullptr;
+}
+
+Player* Game::getOwnerPlayer(uint32_t creatureId)
+{
+	return getOwnerPlayer(getCreatureByID(creatureId));
+}
+
 Monster* Game::getMonsterByID(uint32_t id)
 {
 	if (id == 0) {
@@ -5685,6 +5707,26 @@ void Game::updateCreatureSkull(const Creature* creature)
 	}
 }
 
+void Game::updateCreatureSquare(const Creature* creature)
+{
+	if (!creature || (!ConfigManager::getBoolean(ConfigManager::TOGGLE_EXPERT_PVP) &&
+	                  getWorldType() != WORLD_TYPE_PVP_ENFORCED)) {
+		return;
+	}
+
+	SpectatorVec spectators;
+	map.getSpectators(spectators, creature->getPosition(), true, true);
+	const uint32_t creatureInstance = creature->getInstanceID();
+	for (const auto& spectator : spectators.players()) {
+		Player* p = static_cast<Player*>(spectator.get());
+		if (!p->compareInstance(creatureInstance)) {
+			continue;
+		}
+
+		p->sendCreatureSquare(creature, p->getCreatureSquare(creature));
+	}
+}
+
 void Game::updatePlayerShield(Player* player)
 {
 	SpectatorVec spectators;
@@ -5784,6 +5826,12 @@ void Game::playerInviteToParty(uint32_t playerId, uint32_t invitedId)
 		return;
 	}
 
+	if (ConfigManager::getBoolean(ConfigManager::TOGGLE_EXPERT_PVP) &&
+	    (player->isInPvpSituation() || invitedPlayer->isInPvpSituation())) {
+		player->sendTextMessage(MESSAGE_INFO_DESCR, "You cannot invite players while someone is in a PvP situation.");
+		return;
+	}
+
 	Party* party = player->getParty();
 	if (!party) {
 		Party::create(player);
@@ -5821,6 +5869,12 @@ void Game::playerJoinParty(uint32_t playerId, uint32_t leaderId)
 
 	if (player->getParty()) {
 		player->sendTextMessage(MESSAGE_INFO_DESCR, "You are already in a party.");
+		return;
+	}
+
+	if (ConfigManager::getBoolean(ConfigManager::TOGGLE_EXPERT_PVP) &&
+	    (player->isInPvpSituation() || leader->isInPvpSituation())) {
+		player->sendTextMessage(MESSAGE_INFO_DESCR, "You cannot join a party while someone is in a PvP situation.");
 		return;
 	}
 

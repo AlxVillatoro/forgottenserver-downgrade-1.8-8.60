@@ -2427,11 +2427,18 @@ void ProtocolGame::sendUpdateTile(const Tile* tile, const Position& pos)
 
 void ProtocolGame::sendFightModes()
 {
+	if (!isOTCv8 && !isMehah) {
+		return;
+	}
+
 	NetworkMessage msg;
 	msg.addByte(0xA7);
 	msg.addByte(player->fightMode);
 	msg.addByte(player->chaseMode);
 	msg.addByte(player->secureMode);
+	if (isOTCv8 && !isMehah) {
+		msg.addByte(player->pvpMode);
+	}
 	writeToOutputBuffer(msg);
 }
 
@@ -3274,6 +3281,7 @@ void ProtocolGame::sendFeatures()
 	features[GameFeature::BaseSkillU16] = true;
 	features[GameFeature::AdditionalSkills] = true;
 	features[GameFeature::ExtendedClientPing] = true;
+	features[GameFeature::PVPMode] = ConfigManager::getBoolean(ConfigManager::TOGGLE_EXPERT_PVP);
 
 	if (features.empty()) return;
 

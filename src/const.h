@@ -400,7 +400,19 @@ const uint8_t fluidMap[] = {
 
 enum SquareColor_t : uint8_t
 {
+	SQ_COLOR_BLACK = 0,
+	SQ_COLOR_BROWN = 114,
+	SQ_COLOR_ORANGE = 198,
 	SQ_COLOR_YELLOW = 210,
+	SQ_COLOR_NONE = 255,
+};
+
+enum PvpMode_t : uint8_t
+{
+	PVP_MODE_DOVE = 0,
+	PVP_MODE_WHITE_HAND = 1,
+	PVP_MODE_YELLOW_HAND = 2,
+	PVP_MODE_RED_FIST = 3,
 };
 
 enum TextColor_t : uint8_t

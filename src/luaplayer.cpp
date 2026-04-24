@@ -2343,6 +2343,18 @@ int luaPlayerGetFightMode(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetPvpMode(lua_State* L)
+{
+	// player:getPvpMode()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, player->getPvpMode());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
 int luaPlayerIsSecureModeEnabled(lua_State* L)
 {
 	// player:isSecureModeEnabled()
@@ -2376,6 +2388,19 @@ int luaPlayerSetFightMode(lua_State* L)
 		const bool chase = getBoolean(L, 3, player->isChasingEnabled());
 		const bool secure = getBoolean(L, 4, player->isSecureModeEnabled());
 		player->setFightMode(stance, chase, secure);
+		pushBoolean(L, true);
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetPvpMode(lua_State* L)
+{
+	// player:setPvpMode(mode)
+	Player* player = getUserdata<Player>(L, 1);
+	if (player) {
+		player->setPvpMode(getNumber<PvpMode_t>(L, 2, player->getPvpMode()));
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);
@@ -3582,10 +3607,12 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "hasChaseMode", luaPlayerHasChaseMode);
 	registerMethod("Player", "hasSecureMode", luaPlayerHasSecureMode);
 	registerMethod("Player", "getFightMode", luaPlayerGetFightMode);
+	registerMethod("Player", "getPvpMode", luaPlayerGetPvpMode);
 	registerMethod("Player", "isSecureModeEnabled", luaPlayerIsSecureModeEnabled);
 	registerMethod("Player", "isChasingEnabled", luaPlayerIsChasingEnabled);
 	registerMethod("Player", "setFightMode", luaPlayerSetFightMode);
 	registerMethod("Player", "setFightingModes", luaPlayerSetFightMode);
+	registerMethod("Player", "setPvpMode", luaPlayerSetPvpMode);
 	registerMethod("Player", "stopWalk", luaPlayerStopWalk);
 
 	registerMethod("Player", "getAttackSpeed", luaPlayerGetAttackSpeed);

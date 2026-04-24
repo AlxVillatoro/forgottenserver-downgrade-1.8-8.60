@@ -455,6 +455,7 @@ public:
 
 	bool canSee(const Position& pos) const override;
 	bool canSeeCreature(const Creature* creature) const override;
+	bool canCombat(const Creature* creature) const;
 
 	bool canWalkthrough(const Creature* creature) const;
 	bool canWalkthroughEx(const Creature* creature) const;
@@ -527,6 +528,7 @@ public:
 	void setFightMode(fightMode_t mode) { fightMode = mode; }
 	void setFightMode(fightMode_t stance, bool chase, bool secure);
 	void setSecureMode(bool mode) { secureMode = mode; }
+	void setPvpMode(PvpMode_t mode);
 
 	void setAttackSpeed(uint32_t speed) { attackSpeed = speed; }
 	uint32_t getAttackSpeed() const
@@ -626,10 +628,17 @@ public:
 	int64_t getSkullTicks() const { return skullTicks; }
 	void setSkullTicks(int64_t ticks) { skullTicks = ticks; }
 
-	bool hasAttacked(const Player* attacked) const;
+	bool hasAttacked(const Player* attacked, int64_t time = 0) const;
 	void addAttacked(const Player* attacked);
 	void removeAttacked(const Player* attacked);
 	void clearAttacked();
+	bool hasAttackedBy(const Player* attacker) const;
+	void removeAttackedBy(const Player* attacker);
+	void clearAttackedBy();
+	bool hasPvpActivity(const Player* player, bool guildAndParty, int64_t time = 0) const;
+	bool isInPvpSituation() const;
+	bool isAggressiveCreature(const Creature* creature, bool guildAndParty, int64_t time = 0) const;
+	SquareColor_t getCreatureSquare(const Creature* creature) const;
 	void addUnjustifiedDead(const Player* attacked);
 	void sendCreatureSkull(const Creature* creature) const
 	{
@@ -1186,6 +1195,7 @@ public:
 	bool getChaseMode() const { return chaseMode; }
 	bool getSecureMode() const { return secureMode; }
 	auto getFightMode() const { return fightMode; }
+	auto getPvpMode() const { return pvpMode; }
 	bool isChasingEnabled() const { return chaseMode; }
 	bool isSecureModeEnabled() const { return secureMode; }
 
@@ -1253,7 +1263,8 @@ private:
 	void internalAddThing(Thing* thing) override;
 	void internalAddThing(uint32_t index, Thing* thing) override;
 
-	std::unordered_set<uint32_t> attackedSet;
+	std::unordered_map<uint32_t, int64_t> attackedSet;
+	std::unordered_set<uint32_t> attackedBySet;
 	std::unordered_set<uint32_t> VIPList;
 
 	std::unordered_map<uint8_t, OpenContainer> openContainers;
@@ -1371,6 +1382,7 @@ private:
 	BlockType_t lastAttackBlockType = BLOCK_NONE;
 	tradestate_t tradeState = TRADE_NONE;
 	fightMode_t fightMode = FIGHTMODE_ATTACK;
+	PvpMode_t pvpMode = PVP_MODE_DOVE;
 	AccountType_t accountType = ACCOUNT_TYPE_NORMAL;
 
 	bool chaseMode = false;
