@@ -96,6 +96,8 @@ local CONVERGENCE_PRICES = {
 	[10] = 15000000000
 }
 
+local TRANSFER_PRICES = CONVERGENCE_PRICES
+
 local DUST_TO_SLIVERS = 60
 local SLIVERS_GENERATED = 3
 local SLIVERS_TO_CORE = 50
@@ -141,6 +143,11 @@ local function ensureForgeHistoryTable()
 end
 
 local function debugForge(player, message)
+	if not FORGE_DEBUG then
+		return
+	end
+
+	print(string.format("[CustomForge][%s] %s", player:getName(), tostring(message)))
 end
 
 local function supportsCustomNetwork(player)
@@ -639,7 +646,7 @@ local function sendForgeInit(player)
 	writePriceTable(out, FUSION_COSTS)
 	writeByteMap(out, TRANSFER_CORES)
 	writeNumberMap(out, CONVERGENCE_PRICES)
-	writeNumberMap(out, CONVERGENCE_PRICES)
+	writeNumberMap(out, TRANSFER_PRICES)
 	out:addU16(math.floor(DUST_TO_SLIVERS / SLIVERS_GENERATED))
 	out:addU16(SLIVERS_GENERATED)
 	out:addU16(SLIVERS_TO_CORE)
@@ -790,9 +797,9 @@ local function sendTransferResult(player, convergence, success, otherItem, other
 	return out:sendToPlayer(player)
 end
 
-local function findItems(player, itemId, tier)
+local function findItems(player, itemId, tier, collectedItems)
 	local result = {}
-	for _, item in ipairs(collectForgeItems(player)) do
+	for _, item in ipairs(collectedItems or collectForgeItems(player)) do
 		if item:getId() == itemId and item:getTier() == tier then
 			result[#result + 1] = item
 		end
@@ -800,8 +807,8 @@ local function findItems(player, itemId, tier)
 	return result
 end
 
-local function findTargetItem(player, itemId, tier, sourceItem)
-	for _, item in ipairs(collectForgeItems(player)) do
+local function findTargetItem(player, itemId, tier, sourceItem, collectedItems)
+	for _, item in ipairs(collectedItems or collectForgeItems(player)) do
 		if item:getId() == itemId and item:getTier() == tier and item ~= sourceItem then
 			return item
 		end
@@ -873,12 +880,13 @@ local function handleFusion(player, msg)
 		local boostSuccess = msg:getByte() ~= 0
 		local protectTierLoss = msg:getByte() ~= 0
 
-		local items = findItems(player, itemId, tier)
+		local collectedItems = collectForgeItems(player)
+		local items = findItems(player, itemId, tier, collectedItems)
 		local mainItem = items[1]
 		local sacrificeItem = nil
 
 		if convergence then
-			sacrificeItem = findTargetItem(player, secondItemId, tier, mainItem)
+			sacrificeItem = findTargetItem(player, secondItemId, tier, mainItem, collectedItems)
 		else
 			sacrificeItem = items[2]
 		end
@@ -963,8 +971,9 @@ local function handleTransfer(player, msg)
 		local tier = msg:getByte()
 		local targetItemId = msg:getU16()
 
-		local source = findItems(player, itemId, tier)[1]
-		local target = findTargetItem(player, targetItemId, 0, source)
+		local collectedItems = collectForgeItems(player)
+		local source = findItems(player, itemId, tier, collectedItems)[1]
+		local target = findTargetItem(player, targetItemId, 0, source, collectedItems)
 
 		if not source or not target then
 			sendForgeMessage(player, "Required transfer items were not found.")
@@ -986,7 +995,7 @@ local function handleTransfer(player, msg)
 		local resultTier = convergence and tier or (tier - 1)
 		local dustCost = convergence and DUST_TRANSFER_CONVERGENCE or DUST_TRANSFER
 		local coreCost = convergence and (TRANSFER_CORES[tier] or 1) or (TRANSFER_CORES[tier - 1] or 1)
-		local goldCost = convergence and (CONVERGENCE_PRICES[tier] or 0) or (FUSION_COSTS[classification] and FUSION_COSTS[classification][tier - 1] or 0)
+		local goldCost = convergence and (TRANSFER_PRICES[tier] or 0) or (FUSION_COSTS[classification] and FUSION_COSTS[classification][tier - 1] or 0)
 
 		local valid, message = canPay(player, dustCost, coreCost, goldCost)
 		if not valid then
@@ -1030,7 +1039,13 @@ local function handleConvert(player, msg)
 				refreshForge(player)
 				return false
 			end
-			player:addItem(FORGE_ITEM_IDS.sliver, SLIVERS_GENERATED)
+			local added = player:addItem(FORGE_ITEM_IDS.sliver, SLIVERS_GENERATED)
+			if not added then
+				addForgeDust(player, DUST_TO_SLIVERS)
+				sendForgeMessage(player, "Your inventory is full.")
+				refreshForge(player)
+				return false
+			end
 			addHistory(player, HISTORY_CONVERSION, string.format("%d Dust -> %d Slivers", DUST_TO_SLIVERS, SLIVERS_GENERATED))
 		elseif action == 3 then
 			if not player:removeItem(FORGE_ITEM_IDS.sliver, SLIVERS_TO_CORE) then
@@ -1038,7 +1053,13 @@ local function handleConvert(player, msg)
 				refreshForge(player)
 				return false
 			end
-			player:addItem(FORGE_ITEM_IDS.exaltedCore, 1)
+			local added = player:addItem(FORGE_ITEM_IDS.exaltedCore, 1)
+			if not added then
+				player:addItem(FORGE_ITEM_IDS.sliver, SLIVERS_TO_CORE)
+				sendForgeMessage(player, "Your inventory is full.")
+				refreshForge(player)
+				return false
+			end
 			addHistory(player, HISTORY_CONVERSION, string.format("%d Slivers -> 1 Exalted Core", SLIVERS_TO_CORE))
 		elseif action == 4 then
 			local limit = getForgeDustLimit(player)
