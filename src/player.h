@@ -1285,9 +1285,6 @@ public:
 	bool isOTC() const
 	{
 		switch (operatingSystem) {
-			case CLIENTOS_OTCLIENT_LINUX:
-			case CLIENTOS_OTCLIENT_WINDOWS:
-			case CLIENTOS_OTCLIENT_MAC:
 			case CLIENTOS_OTCLIENTV8_LINUX:
 			case CLIENTOS_OTCLIENTV8_WINDOWS:
 			case CLIENTOS_OTCLIENTV8_MAC:
@@ -1407,7 +1404,6 @@ private:
 	int64_t lastToggleMount = 0;
 	int64_t lastPing;
 	int64_t lastPong;
-	int64_t lastDllCheck = 0;
 	int64_t ghostModeStartTime = 0;
 	int64_t nextAction = 0;
 

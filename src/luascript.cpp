@@ -1982,6 +1982,8 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(CLIENTOS_OTCLIENTV8_ANDROID);
 	registerEnum(CLIENTOS_OTCLIENTV8_IOS);
 	registerEnum(CLIENTOS_OTCLIENTV8_WEB);
+	registerEnum(CLIENTOS_OLD_CUSTOM);
+	registerEnum(CLIENTOS_OTC_CUSTOM);
 
 	registerEnum(FIGHTMODE_ATTACK);
 	registerEnum(FIGHTMODE_BALANCED);

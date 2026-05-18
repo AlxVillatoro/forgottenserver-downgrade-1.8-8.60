@@ -52,6 +52,7 @@ enum clientVersion_t
 	CLIENT_VERSION_855 = 18,
 	CLIENT_VERSION_860_OLD = 19,
 	CLIENT_VERSION_860 = 20,
+	CLIENT_VERSION_861 = 21,
 };
 
 enum rootattrib_

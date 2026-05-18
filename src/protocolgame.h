@@ -160,7 +160,6 @@ private:
 	void sendCreatureHealth(const Creature* creature);
 	void sendSkills();
 	void sendPing();
-	void sendDllCheck();
 	void sendCreatureTurn(const Creature* creature, uint32_t stackpos);
 	void sendCreatureSay(const Creature* creature, SpeakClasses type, std::string_view text,
 	                     const Position* pos = nullptr);
@@ -329,8 +328,6 @@ private:
 	bool useItemTierByte = false;
 	bool debugAssertSent = false;
 	bool acceptPackets = false;
-
-	uint32_t dllCheckSequence = 0;
 
 	int64_t moveWindowStart = 0;
 	uint16_t movePacketCount = 0;
