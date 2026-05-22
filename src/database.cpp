@@ -11,6 +11,8 @@
 #include <mysql/errmsg.h>
 #include "logger.h"
 #include <fmt/format.h>
+#include <algorithm>
+#include <cctype>
 
 static constexpr int MAX_RECONNECT_ATTEMPTS = 10;
 static constexpr unsigned int MYSQL_TIMEOUT_SECONDS = 30;
@@ -77,11 +79,37 @@ static bool isLostConnectionError(const unsigned error)
 	       error == 1053 /*ER_SERVER_SHUTDOWN*/ || error == CR_CONNECTION_ERROR;
 }
 
+static bool isValidSqlIdentifier(std::string_view identifier)
+{
+	if (identifier.empty()) {
+		return false;
+	}
+	const auto isIdentifierHead = [](unsigned char ch) {
+		return std::isalpha(ch) || ch == '_';
+	};
+	const auto isIdentifierTail = [](unsigned char ch) {
+		return std::isalnum(ch) || ch == '_';
+	};
+	if (!isIdentifierHead(static_cast<unsigned char>(identifier.front()))) {
+		return false;
+	}
+	return std::all_of(identifier.begin() + 1, identifier.end(), [isIdentifierTail](char ch) {
+		return isIdentifierTail(static_cast<unsigned char>(ch));
+	});
+}
+
+static void logQueryError(tfs::detail::Mysql_ptr& handle, std::string_view query)
+{
+	LOG_ERROR(fmt::format("[Error - mysql_real_query] Query: {}\nMessage: {}", query.substr(0, 256), mysql_error(handle.get())));
+}
+
 // Single-attempt query execution. Reconnect/retry is handled by the Database member methods.
-static bool executeQuery(tfs::detail::Mysql_ptr& handle, std::string_view query)
+static bool executeQuery(tfs::detail::Mysql_ptr& handle, std::string_view query, bool logError = true)
 {
 	if (mysql_real_query(handle.get(), query.data(), query.length()) != 0) {
-		LOG_ERROR(fmt::format("[Error - mysql_real_query] Query: {}\nMessage: {}", query.substr(0, 256), mysql_error(handle.get())));
+		if (logError) {
+			logQueryError(handle, query);
+		}
 		return false;
 	}
 	return true;
@@ -195,18 +223,20 @@ bool Database::executeQuery(std::string_view query)
 	std::chrono::steady_clock::time_point time_point = std::chrono::steady_clock::now();
 #endif
 
-	bool success = ::executeQuery(handle, query);
+	bool success = ::executeQuery(handle, query, false);
 
 	if (!success) {
 		const unsigned int mysqlError = mysql_errno(handle.get());
 		if (retryQueries && isLostConnectionError(mysqlError)) {
 			LOG_WARN(fmt::format("[Database::executeQuery] Lost connection (error {}), attempting reconnect...", mysqlError));
 			if (reconnect()) {
-				success = ::executeQuery(handle, query);
+				success = ::executeQuery(handle, query, false);
 				if (!success) {
-					LOG_ERROR(fmt::format("[Database::executeQuery] Retry failed after reconnect: {}", mysql_error(handle.get())));
+					logQueryError(handle, query);
 				}
 			}
+		} else {
+			logQueryError(handle, query);
 		}
 	}
 
@@ -233,15 +263,19 @@ DBResult_ptr Database::storeQuery(std::string_view query)
 
 	tfs::detail::MysqlResult_ptr res;
 
-	if (!::executeQuery(handle, query)) {
+	if (!::executeQuery(handle, query, false)) {
 		const unsigned int mysqlError = mysql_errno(handle.get());
 		if (!retryQueries || !isLostConnectionError(mysqlError)) {
+			logQueryError(handle, query);
 			return nullptr;
 		}
-		// Lost connection — reconnect once and retry
+		// Lost connection: reconnect once and retry.
 		LOG_WARN(fmt::format("[Database::storeQuery] Lost connection (error {}), attempting reconnect...", mysqlError));
-		if (!reconnect() || !::executeQuery(handle, query)) {
-			LOG_ERROR(fmt::format("[Database::storeQuery] Retry failed after reconnect: {}", mysql_error(handle.get())));
+		if (!reconnect()) {
+			return nullptr;
+		}
+		if (!::executeQuery(handle, query, false)) {
+			logQueryError(handle, query);
 			return nullptr;
 		}
 	}
@@ -398,10 +432,18 @@ bool DBInsert::execute()
 	return res;
 }
 
-void DBInsert::upsert(std::vector<std::string> columns)
+void DBInsert::upsert(const std::vector<std::string>& columns)
 {
 	if (columns.empty()) {
 		return;
+	}
+
+	for (const auto& column : columns) {
+		if (!isValidSqlIdentifier(column)) {
+			LOG_ERROR(fmt::format("[DBInsert::upsert] Invalid SQL column identifier: {}", column));
+			upsertClause.clear();
+			return;
+		}
 	}
 
 	upsertClause = " ON DUPLICATE KEY UPDATE ";

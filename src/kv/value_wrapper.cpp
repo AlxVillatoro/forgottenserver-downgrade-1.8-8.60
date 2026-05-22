@@ -2,10 +2,12 @@
 // Use of this source code is governed by the GPL-2.0 License that can be found in the LICENSE file.
 
 #include "otpch.h"
-#include "kv/value_wrapper.hpp"
+#include "kv/value_wrapper.h"
 
+#include <chrono>
 #include <cstring>
 #include <stdexcept>
+#include <type_traits>
 
 namespace {
 	enum class SerType : uint8_t {
@@ -20,51 +22,66 @@ namespace {
 
 	template <typename T>
 	void writeLE(char*& ptr, T value) {
+		using U = std::make_unsigned_t<T>;
+		U unsignedValue = static_cast<U>(value);
 		for (size_t i = 0; i < sizeof(T); ++i) {
-			*ptr++ = static_cast<char>(value & 0xFF);
-			value >>= 8;
+			*ptr++ = static_cast<char>(unsignedValue & 0xFF);
+			unsignedValue >>= 8;
 		}
 	}
 
 	template <typename T>
 	T readLE(const char*& ptr) {
-		T value = 0;
+		using U = std::make_unsigned_t<T>;
+		U value = 0;
 		for (size_t i = 0; i < sizeof(T); ++i) {
-			value |= static_cast<T>(static_cast<uint8_t>(*ptr++)) << (i * 8);
+			value |= static_cast<U>(static_cast<uint8_t>(*ptr++)) << (i * 8);
 		}
-		return value;
+		return static_cast<T>(value);
 	}
 
 	template <typename T>
 	T readLEChecked(const char*& ptr, const char* end) {
-		if (ptr + sizeof(T) > end) throw std::runtime_error("Unexpected end of data");
+		if (static_cast<size_t>(end - ptr) < sizeof(T)) throw std::runtime_error("Unexpected end of data");
 		return readLE<T>(ptr);
+	}
+
+	uint64_t currentTimestamp() {
+		const auto now = std::chrono::system_clock::now().time_since_epoch();
+		return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+	}
+
+	uint64_t resolveTimestamp(uint64_t timestamp) {
+		return timestamp == 0 ? currentTimestamp() : timestamp;
 	}
 }
 
 ValueWrapper::ValueWrapper(uint64_t timestamp) :
-	timestamp_(timestamp) { }
+	timestamp_(resolveTimestamp(timestamp)) { }
 
 ValueWrapper::ValueWrapper(ValueVariant value, uint64_t timestamp) :
-	data_(std::move(value)), timestamp_(timestamp) { }
+	data_(std::move(value)), timestamp_(resolveTimestamp(timestamp)) { }
 
 ValueWrapper::ValueWrapper(const std::string &value, uint64_t timestamp) :
-	data_(value), timestamp_(timestamp) { }
+	data_(value), timestamp_(resolveTimestamp(timestamp)) { }
+
+ValueWrapper::ValueWrapper(const char* value, uint64_t timestamp) :
+	data_(std::string(value ? value : "")), timestamp_(resolveTimestamp(timestamp)) { }
 
 ValueWrapper::ValueWrapper(bool value, uint64_t timestamp) :
-	data_(value), timestamp_(timestamp) { }
+	data_(value), timestamp_(resolveTimestamp(timestamp)) { }
 
 ValueWrapper::ValueWrapper(int32_t value, uint64_t timestamp) :
-	data_(value), timestamp_(timestamp) { }
+	data_(value), timestamp_(resolveTimestamp(timestamp)) { }
 
 ValueWrapper::ValueWrapper(double value, uint64_t timestamp) :
-	data_(value), timestamp_(timestamp) { }
+	data_(value), timestamp_(resolveTimestamp(timestamp)) { }
 
 ValueWrapper::ValueWrapper(const MapType &value, uint64_t timestamp) :
-	data_(value), timestamp_(timestamp) { }
+	data_(value), timestamp_(resolveTimestamp(timestamp)) { }
 
 ValueWrapper::ValueWrapper(const std::initializer_list<std::pair<const std::string, ValueWrapper>> &init_list, uint64_t timestamp) :
-	timestamp_(timestamp) {
+	timestamp_(resolveTimestamp(timestamp)) {
 	MapType map;
 	for (const auto &[key, val] : init_list) {
 		map[key] = std::make_shared<ValueWrapper>(val);
@@ -73,7 +90,7 @@ ValueWrapper::ValueWrapper(const std::initializer_list<std::pair<const std::stri
 }
 
 ValueWrapper::ValueWrapper(const std::initializer_list<ValueWrapper> &init_list, uint64_t timestamp) :
-	timestamp_(timestamp) {
+	timestamp_(resolveTimestamp(timestamp)) {
 	ArrayType arr(init_list);
 	data_ = arr;
 }
@@ -166,7 +183,11 @@ std::string ValueWrapper::serialize() const {
 				writeLE(p, keyLen);
 				out.append(buf, 4);
 				out.append(key);
-				out.append(val->serialize());
+				if (val) {
+					out.append(val->serialize());
+				} else {
+					out.push_back(static_cast<char>(SerType::Null));
+				}
 			}
 		}
 	}, data_);
@@ -209,7 +230,7 @@ std::optional<ValueWrapper> ValueWrapper::deserialize(const char* data, size_t s
 			}
 			case SerType::String: {
 				uint32_t len = readLEChecked<uint32_t>(ptr, end);
-				if (ptr + len > end) throw std::runtime_error("Unexpected end of data");
+				if (static_cast<size_t>(end - ptr) < len) throw std::runtime_error("Unexpected end of data");
 				std::string str(ptr, len);
 				ptr += len;
 				return ValueWrapper(str, timestamp);
@@ -232,7 +253,7 @@ std::optional<ValueWrapper> ValueWrapper::deserialize(const char* data, size_t s
 				MapType map;
 				for (uint32_t i = 0; i < count; ++i) {
 					uint32_t keyLen = readLEChecked<uint32_t>(ptr, end);
-					if (ptr + keyLen > end) throw std::runtime_error("Unexpected end of data");
+					if (static_cast<size_t>(end - ptr) < keyLen) throw std::runtime_error("Unexpected end of data");
 					std::string key(ptr, keyLen);
 					ptr += keyLen;
 					auto val = self(self);

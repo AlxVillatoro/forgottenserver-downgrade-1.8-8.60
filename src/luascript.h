@@ -62,6 +62,7 @@ enum LuaDataType
 	LuaData_XMLDocument,
 	LuaData_XMLNode,
 	LuaData_Zone,
+	LuaData_KV,
 };
 
 template <class T>
@@ -88,6 +89,7 @@ class House;
 class InstantSpell;
 class Item;
 class ItemType;
+class KV;
 class Loot;
 class LuaScriptInterface;
 class LuaVariant;

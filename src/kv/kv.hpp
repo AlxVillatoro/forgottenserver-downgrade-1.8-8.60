@@ -18,7 +18,7 @@
 #include <iomanip>
 #include <unordered_map>
 
-#include "kv/value_wrapper.hpp"
+#include "kv/value_wrapper.h"
 
 class DBInsert;
 
@@ -86,7 +86,7 @@ protected:
 
 private:
 	void setLocked(const std::string &key, const ValueWrapper &value);
-	void processEvictions();
+	bool processEvictions();
 
 	bool prepareSave(const std::string &key, const ValueWrapper &value, DBInsert &update) const;
 	DBInsert dbUpdate();
@@ -134,13 +134,21 @@ public:
 	}
 
 	std::unordered_set<std::string> keys(const std::string &prefix = "") override {
-		return rootKV_.keys(buildKey(prefix));
+		return rootKV_.keys(buildListKey(prefix));
 	}
 
 private:
 	std::string buildKey(const std::string &key) const {
 		if (key.empty()) return prefix_;
 		return fmt::format("{}.{}", prefix_, key);
+	}
+
+	std::string buildListKey(const std::string &key) const {
+		std::string listKey = buildKey(key);
+		if (!listKey.empty() && listKey.back() != '.') {
+			listKey.push_back('.');
+		}
+		return listKey;
 	}
 
 	KVStore &rootKV_;

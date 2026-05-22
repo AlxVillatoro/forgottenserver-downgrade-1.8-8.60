@@ -1,5 +1,5 @@
 function onUpdateDatabase()
-	logMigration("Updating database to version 40 (Reset System: verify resets column)")
+	logMigration("Updating database to version 41 (Reset System: verify resets column)")
 
 	local resultId = db.storeQuery(
 		"SELECT COUNT(*) AS `cnt` FROM `information_schema`.`COLUMNS`"

@@ -151,7 +151,7 @@ std::shared_ptr<KV> KVStore::scoped(const std::string &scope) {
 	return std::make_shared<ScopedKV>(*this, scope);
 }
 
-void KVStore::processEvictions() {
+bool KVStore::processEvictions() {
 	std::vector<std::pair<std::string, ValueWrapper>> evictions;
 	{
 		std::scoped_lock lock(mutex_);
@@ -161,12 +161,15 @@ void KVStore::processEvictions() {
 		}
 	}
 
+	bool success = true;
 	for (const auto &[key, value] : evictions) {
 		if (!save(key, value)) {
+			success = false;
 			std::scoped_lock lock(mutex_);
 			pendingEvictions_.emplace_back(key, value);
 		}
 	}
+	return success;
 }
 
 void KVStore::flush() {
@@ -271,10 +274,19 @@ bool KVStore::prepareSave(const std::string &key, const ValueWrapper &value, DBI
 }
 
 bool KVStore::saveAll() {
-	// Drain pending evictions first so they are included in the save
-	processEvictions();
+	// Drain pending evictions before the main cache snapshot.
+	if (!processEvictions()) {
+		g_logger().error("KVStore::saveAll() - Error saving pending KV evictions");
+		return false;
+	}
 
 	auto store = getStore();
+
+	DBTransaction transaction;
+	if (!transaction.begin()) {
+		g_logger().error("KVStore::saveAll() - Failed to start database transaction");
+		return false;
+	}
 
 	auto update = dbUpdate();
 	bool success = true;
@@ -286,6 +298,9 @@ bool KVStore::saveAll() {
 	}
 	if (success) {
 		success = update.execute();
+	}
+	if (success) {
+		success = transaction.commit();
 	}
 
 	if (!success) {

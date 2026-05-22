@@ -33,6 +33,8 @@ extern Game g_game;
 extern Vocations g_vocations;
 
 namespace {
+constexpr uint32_t CHAIN_SYSTEM_STORAGE = 40001;
+
 void trimString(std::string& str) { boost::algorithm::trim(str); }
 
 // std::string asLowerCaseString(const std::string& str) { return boost::algorithm::to_lower_copy<std::string>(str); }
@@ -5056,7 +5058,18 @@ bool Player::checkChainSystem() const
 	auto playerKV = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", getGUID()));
 	auto settings = playerKV->scoped("settings");
 	auto chainValue = settings->get("chainSystem");
-	return chainValue.has_value() && chainValue->get<BooleanType>();
+	if (chainValue.has_value()) {
+		return chainValue->get<BooleanType>();
+	}
+
+	const auto legacyValue = getStorageValue(CHAIN_SYSTEM_STORAGE);
+	if (!legacyValue.has_value()) {
+		return false;
+	}
+
+	const bool enabled = legacyValue.value() == 1;
+	settings->set("chainSystem", ValueWrapper(enabled));
+	return enabled;
 }
 
 PartyShields_t Player::getPartyShield(const Player* player) const
