@@ -345,9 +345,6 @@ bool ConfigManager::load()
 		strings[String::MYSQL_DB] = getGlobalString(L, "mysqlDatabase", getEnv("MYSQL_DATABASE", "forgottenserver"));
 		strings[String::MYSQL_SOCK] = getGlobalString(L, "mysqlSock", getEnv("MYSQL_SOCK", ""));
 
-		strings[String::ASSETS_DAT_PATH] =
-		    getGlobalString(L, "assetsDatPath", "data/items/assets.dat");
-
 		integers[Integer::SQL_PORT] = getGlobalInteger(L, "mysqlPort", getEnv<uint16_t>("MYSQL_PORT", 3306));
 
 		if (integers[Integer::GAME_PORT] == 0) {
@@ -363,6 +360,8 @@ bool ConfigManager::load()
 
 		integers[Integer::MARKET_OFFER_DURATION] = getGlobalInteger(L, "marketOfferDuration", 30 * 24 * 60 * 60);
 	}
+
+	strings[String::ASSETS_DAT_PATH] = getGlobalString(L, "assetsDatPath", "data/items/assets.dat");
 
 	booleans[Boolean::ALLOW_CHANGEOUTFIT] = getGlobalBoolean(L, "allowChangeOutfit", true);
 	booleans[Boolean::ONE_PLAYER_ON_ACCOUNT] = getGlobalBoolean(L, "onePlayerOnlinePerAccount", true);

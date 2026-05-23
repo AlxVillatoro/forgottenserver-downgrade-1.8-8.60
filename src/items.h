@@ -467,8 +467,9 @@ public:
 	uint16_t getItemIdByName(const std::string& name);
 
 
-	bool loadFromXml();
-	void parseItemNode(const pugi::xml_node& itemNode, uint16_t id);
+	bool loadFromXml(bool parseScriptAttributes = true, bool scriptAttributesOnly = false);
+	void parseItemNode(const pugi::xml_node& itemNode, uint16_t id, bool parseScriptAttributes,
+	                   bool scriptAttributesOnly);
 	void parseScriptAttribute(ItemType& it, const pugi::xml_node& attributeNode, const pugi::xml_attribute& valueAttribute);
 
 	void buildInventoryList();

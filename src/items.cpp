@@ -663,15 +663,23 @@ void Items::clear()
 
 bool Items::reload()
 {
-	clear();
-	if (!loadFromDat(getString(ConfigManager::ASSETS_DAT_PATH))) {
+	Items loadedItems;
+	if (!loadedItems.loadFromDat(getString(ConfigManager::ASSETS_DAT_PATH))) {
 		return false;
 	}
 
+	if (!loadedItems.loadFromXml(false)) {
+		return false;
+	}
+
+	items = std::move(loadedItems.items);
+	nameToItems = std::move(loadedItems.nameToItems);
+	currencyItems = std::move(loadedItems.currencyItems);
+	inventory = std::move(loadedItems.inventory);
+
 	g_moveEvents->reload();
 	g_weapons->reload();
-
-	if (!loadFromXml()) {
+	if (!loadFromXml(true, true)) {
 		return false;
 	}
 
@@ -725,7 +733,7 @@ bool Items::loadFromDat(std::string_view file)
 	return true;
 }
 
-bool Items::loadFromXml()
+bool Items::loadFromXml(bool parseScriptAttributes, bool scriptAttributesOnly)
 {
 	pugi::xml_document doc;
 	pugi::xml_parse_result result = doc.load_file("data/items/items.xml");
@@ -737,7 +745,8 @@ bool Items::loadFromXml()
 	for (auto itemNode : doc.child("items").children()) {
 		pugi::xml_attribute idAttribute = itemNode.attribute("id");
 		if (idAttribute) {
-			parseItemNode(itemNode, pugi::cast<uint16_t>(idAttribute.value()));
+			parseItemNode(itemNode, pugi::cast<uint16_t>(idAttribute.value()), parseScriptAttributes,
+			              scriptAttributesOnly);
 			continue;
 		}
 
@@ -756,15 +765,16 @@ bool Items::loadFromXml()
 		uint16_t id = pugi::cast<uint16_t>(fromIdAttribute.value());
 		uint16_t toId = pugi::cast<uint16_t>(toIdAttribute.value());
 		while (id <= toId) {
-			parseItemNode(itemNode, id++);
+			parseItemNode(itemNode, id++, parseScriptAttributes, scriptAttributesOnly);
 		}
 	}
 	return true;
 }
 
-void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
+void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id, bool parseScriptAttributes,
+                          bool scriptAttributesOnly)
 {
-	if (id > 0 && id < 100) {
+	if (!scriptAttributesOnly && id > 0 && id < 100) {
 		ItemType& iType = items[id];
 		iType.id = id;
 	}
@@ -774,28 +784,30 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 		return;
 	}
 
-	if (!it.name.empty()) {
+	if (!scriptAttributesOnly && !it.name.empty()) {
 		LOG_WARN(fmt::format("[Warning - Items::parseItemNode] Duplicate item with id: {}", id));
 		return;
 	}
 
-	it.name = itemNode.attribute("name").as_string();
+	if (!scriptAttributesOnly) {
+		it.name = itemNode.attribute("name").as_string();
 
-	if (!it.name.empty()) {
-		std::string lowerCaseName = boost::algorithm::to_lower_copy(it.name);
-		if (!nameToItems.contains(lowerCaseName)) {
-			nameToItems.emplace(std::move(lowerCaseName), id);
+		if (!it.name.empty()) {
+			std::string lowerCaseName = boost::algorithm::to_lower_copy(it.name);
+			if (!nameToItems.contains(lowerCaseName)) {
+				nameToItems.emplace(std::move(lowerCaseName), id);
+			}
 		}
-	}
 
-	pugi::xml_attribute articleAttribute = itemNode.attribute("article");
-	if (articleAttribute) {
-		it.article = articleAttribute.as_string();
-	}
+		pugi::xml_attribute articleAttribute = itemNode.attribute("article");
+		if (articleAttribute) {
+			it.article = articleAttribute.as_string();
+		}
 
-	pugi::xml_attribute pluralAttribute = itemNode.attribute("plural");
-	if (pluralAttribute) {
-		it.pluralName = pluralAttribute.as_string();
+		pugi::xml_attribute pluralAttribute = itemNode.attribute("plural");
+		if (pluralAttribute) {
+			it.pluralName = pluralAttribute.as_string();
+		}
 	}
 
 	Abilities& abilities = it.getAbilities();
@@ -824,6 +836,10 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 		auto parseAttribute = ItemParseAttributesMap.find(tmpStrValue);
 		if (parseAttribute != ItemParseAttributesMap.end()) {
 			ItemParseAttributes_t parseType = parseAttribute->second;
+			if (scriptAttributesOnly && parseType != ITEM_PARSE_SCRIPT) {
+				continue;
+			}
+
 			switch (parseType) {
 				case ITEM_PARSE_TYPE: {
 					tmpStrValue = boost::algorithm::to_lower_copy<std::string>(valueAttribute.as_string());
@@ -2093,7 +2109,9 @@ void Items::parseItemNode(const pugi::xml_node& itemNode, uint16_t id)
 				}
 
 				case ITEM_PARSE_SCRIPT: {
-					parseScriptAttribute(it, attributeNode, valueAttribute);
+					if (parseScriptAttributes) {
+						parseScriptAttribute(it, attributeNode, valueAttribute);
+					}
 					break;
 				}
 
