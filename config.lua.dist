@@ -216,6 +216,9 @@ mysqlDatabase = "forgottenserver"
 mysqlPort = 3306
 mysqlSock = ""
 
+-- Items
+assetsDatPath = "data/items/assets.dat"
+
 -- Misc.
 -- NOTE: classicAttackSpeed set to true makes players constantly attack at regular
 -- intervals regardless of other actions such as item (potion) use. This setting

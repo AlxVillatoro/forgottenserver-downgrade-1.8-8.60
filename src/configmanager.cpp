@@ -345,6 +345,9 @@ bool ConfigManager::load()
 		strings[String::MYSQL_DB] = getGlobalString(L, "mysqlDatabase", getEnv("MYSQL_DATABASE", "forgottenserver"));
 		strings[String::MYSQL_SOCK] = getGlobalString(L, "mysqlSock", getEnv("MYSQL_SOCK", ""));
 
+		strings[String::ASSETS_DAT_PATH] =
+		    getGlobalString(L, "assetsDatPath", "data/items/assets.dat");
+
 		integers[Integer::SQL_PORT] = getGlobalInteger(L, "mysqlPort", getEnv<uint16_t>("MYSQL_PORT", 3306));
 
 		if (integers[Integer::GAME_PORT] == 0) {

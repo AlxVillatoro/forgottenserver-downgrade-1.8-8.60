@@ -15,6 +15,8 @@
 #include <fmt/format.h>
 #include <fstream>
 #include <cstring>
+#include <limits>
+#include <type_traits>
 #include "configmanager.h"
 #include "itemloader.h"
 
@@ -322,6 +324,327 @@ Direction getDirection(std::string_view string)
 	return DIRECTION_NORTH;
 }
 
+class DatReader
+{
+public:
+	explicit DatReader(const std::vector<uint8_t>& buffer) : buffer{buffer} {}
+
+	size_t position() const { return offset; }
+	size_t remaining() const { return buffer.size() - offset; }
+
+	bool skip(size_t count)
+	{
+		if (count > remaining()) {
+			return false;
+		}
+
+		offset += count;
+		return true;
+	}
+
+	template <typename T>
+	bool read(T& value)
+	{
+		static_assert(std::is_trivially_copyable_v<T>);
+		if (sizeof(T) > remaining()) {
+			return false;
+		}
+
+		std::memcpy(&value, buffer.data() + offset, sizeof(T));
+		offset += sizeof(T);
+		return true;
+	}
+
+private:
+	const std::vector<uint8_t>& buffer;
+	size_t offset = 0;
+};
+
+bool skipDatMarketItem(DatReader& reader)
+{
+	uint16_t nameLength = 0;
+	return reader.skip(6) && reader.read(nameLength) && reader.skip(static_cast<size_t>(nameLength) + 4);
+}
+
+bool readDatAttributes(ItemType& iType, DatReader& reader, bool logErrors)
+{
+	uint8_t rawFlag = 0;
+	do {
+		if (!reader.read(rawFlag)) {
+			return false;
+		}
+
+		switch (static_cast<ItemDatFlag>(rawFlag)) {
+			case ItemDatFlag::Ground: {
+				uint16_t groundSpeed = 0;
+				if (!reader.read(groundSpeed)) {
+					return false;
+				}
+
+				iType.group = ITEM_GROUP_GROUND;
+				iType.speed = groundSpeed;
+				break;
+			}
+
+			case ItemDatFlag::GroundBorder:
+				iType.alwaysOnTopOrder = 1;
+				break;
+
+			case ItemDatFlag::OnBottom:
+				iType.alwaysOnTopOrder = 2;
+				break;
+
+			case ItemDatFlag::OnTop:
+				iType.alwaysOnTopOrder = 3;
+				break;
+
+			case ItemDatFlag::Container:
+				iType.group = ITEM_GROUP_CONTAINER;
+				iType.type = ITEM_TYPE_CONTAINER;
+				break;
+
+			case ItemDatFlag::Stackable:
+				iType.stackable = true;
+				break;
+
+			case ItemDatFlag::ForceUse:
+				iType.forceUse = true;
+				break;
+
+			case ItemDatFlag::MultiUse:
+				iType.useable = true;
+				break;
+
+			case ItemDatFlag::Writable: {
+				uint16_t maxTextLength = 0;
+				if (!reader.read(maxTextLength)) {
+					return false;
+				}
+
+				iType.canWriteText = true;
+				iType.canReadText = true;
+				iType.maxTextLen = maxTextLength;
+				break;
+			}
+
+			case ItemDatFlag::WritableOnce: {
+				uint16_t maxTextLength = 0;
+				if (!reader.read(maxTextLength)) {
+					return false;
+				}
+
+				iType.canReadText = true;
+				iType.maxTextLen = maxTextLength;
+				break;
+			}
+
+			case ItemDatFlag::FluidContainer:
+				iType.group = ITEM_GROUP_FLUID;
+				break;
+
+			case ItemDatFlag::Fluid:
+				iType.group = ITEM_GROUP_SPLASH;
+				break;
+
+			case ItemDatFlag::IsUnpassable:
+				iType.blockSolid = true;
+				break;
+
+			case ItemDatFlag::IsUnmoveable:
+				iType.moveable = false;
+				break;
+
+			case ItemDatFlag::BlockMissiles:
+				iType.blockProjectile = true;
+				break;
+
+			case ItemDatFlag::BlockPathfinder:
+				iType.blockPathFind = true;
+				break;
+
+			case ItemDatFlag::Pickupable:
+				iType.pickupable = true;
+				break;
+
+			case ItemDatFlag::Hangable:
+				iType.isHangable = true;
+				break;
+
+			case ItemDatFlag::IsHorizontal:
+				iType.isHorizontal = true;
+				break;
+
+			case ItemDatFlag::IsVertical:
+				iType.isVertical = true;
+				break;
+
+			case ItemDatFlag::Rotatable:
+				iType.rotatable = true;
+				break;
+
+			case ItemDatFlag::HasLight: {
+				uint16_t lightLevel = 0;
+				uint16_t lightColor = 0;
+				if (!reader.read(lightLevel) || !reader.read(lightColor)) {
+					return false;
+				}
+
+				iType.lightLevel = static_cast<uint8_t>(lightLevel);
+				iType.lightColor = static_cast<uint8_t>(lightColor);
+				break;
+			}
+
+			case ItemDatFlag::DontHide:
+			case ItemDatFlag::Translucent:
+			case ItemDatFlag::Lying:
+			case ItemDatFlag::AnimateAlways:
+			case ItemDatFlag::FullGround:
+				break;
+
+			case ItemDatFlag::HasOffset:
+				if (!reader.skip(4)) {
+					return false;
+				}
+				break;
+
+			case ItemDatFlag::HasElevation:
+				if (!reader.skip(2)) {
+					return false;
+				}
+				iType.hasHeight = true;
+				break;
+
+			case ItemDatFlag::Minimap:
+				if (!reader.skip(2)) {
+					return false;
+				}
+				break;
+
+			case ItemDatFlag::LensHelp: {
+				uint16_t lensHelp = 0;
+				if (!reader.read(lensHelp)) {
+					return false;
+				}
+
+				if (lensHelp == 1112) {
+					iType.canReadText = true;
+				}
+				break;
+			}
+
+			case ItemDatFlag::IgnoreLook:
+				iType.lookThrough = true;
+				break;
+
+			case ItemDatFlag::Cloth:
+				if (!reader.skip(2)) {
+					return false;
+				}
+				break;
+
+			case ItemDatFlag::MarketItem:
+				if (!skipDatMarketItem(reader)) {
+					return false;
+				}
+				break;
+
+			case ItemDatFlag::LastFlag:
+				break;
+
+			default:
+				if (logErrors) {
+					LOG_ERROR(fmt::format("[Error - Items::loadFromDat] Unknown flag {} at item id {}.", rawFlag, iType.id));
+				}
+				return false;
+		}
+	} while (rawFlag != static_cast<uint8_t>(ItemDatFlag::LastFlag));
+
+	iType.alwaysOnTop = iType.alwaysOnTopOrder != 0;
+	return true;
+}
+
+bool skipDatSpriteLayout(DatReader& reader, size_t spriteIdBytes, uint8_t* frameCount = nullptr)
+{
+	uint8_t width = 0;
+	uint8_t height = 0;
+	uint8_t layers = 0;
+	uint8_t patternX = 0;
+	uint8_t patternY = 0;
+	uint8_t patternZ = 0;
+	uint8_t frames = 0;
+	if (!reader.read(width) || !reader.read(height)) {
+		return false;
+	}
+
+	if (width == 0 || height == 0) {
+		return false;
+	}
+
+	if ((width > 1 || height > 1) && !reader.skip(1)) {
+		return false;
+	}
+
+	if (!reader.read(layers) || !reader.read(patternX) || !reader.read(patternY) || !reader.read(patternZ) ||
+	    !reader.read(frames)) {
+		return false;
+	}
+
+	if (layers == 0 || patternX == 0 || patternY == 0 || patternZ == 0 || frames == 0) {
+		return false;
+	}
+
+	const uint64_t spriteCount = static_cast<uint64_t>(width) * height * layers * patternX * patternY * patternZ * frames;
+	if (spriteCount > (std::numeric_limits<size_t>::max)() / spriteIdBytes) {
+		return false;
+	}
+
+	if (frameCount) {
+		*frameCount = frames;
+	}
+	return reader.skip(static_cast<size_t>(spriteCount) * spriteIdBytes);
+}
+
+bool parseDatBuffer(const std::vector<uint8_t>& buffer, size_t spriteIdBytes, std::vector<ItemType>& parsedItems,
+                    uint16_t& itemCount, bool logErrors)
+{
+	if (spriteIdBytes != sizeof(uint16_t) && spriteIdBytes != sizeof(uint32_t)) {
+		return false;
+	}
+
+	DatReader reader{buffer};
+	uint32_t signature = 0;
+	uint16_t outfitCount = 0;
+	uint16_t effectCount = 0;
+	uint16_t distanceEffectCount = 0;
+	if (!reader.read(signature) || !reader.read(itemCount) || !reader.read(outfitCount) || !reader.read(effectCount) ||
+	    !reader.read(distanceEffectCount)) {
+		return false;
+	}
+
+	if (itemCount < 100) {
+		return false;
+	}
+
+	std::vector<ItemType> itemsBuffer(itemCount + 1);
+	for (uint32_t id = 100; id <= itemCount; ++id) {
+		ItemType& iType = itemsBuffer[id];
+		iType.id = static_cast<uint16_t>(id);
+
+		if (!readDatAttributes(iType, reader, logErrors)) {
+			return false;
+		}
+
+		uint8_t frames = 0;
+		if (!skipDatSpriteLayout(reader, spriteIdBytes, &frames)) {
+			return false;
+		}
+		iType.isAnimation = frames > 1;
+	}
+
+	parsedItems = std::move(itemsBuffer);
+	return true;
+}
+
 } // namespace
 
 Items::Items()
@@ -341,7 +664,9 @@ void Items::clear()
 bool Items::reload()
 {
 	clear();
-	loadFromOtb("data/items/items.otb");
+	if (!loadFromDat(getString(ConfigManager::ASSETS_DAT_PATH))) {
+		return false;
+	}
 
 	g_moveEvents->reload();
 	g_weapons->reload();
@@ -355,238 +680,48 @@ bool Items::reload()
 	return true;
 }
 
-constexpr auto OTBI = OTB::Identifier{{'O', 'T', 'B', 'I'}};
-
-bool Items::loadFromOtb(const std::string& file)
+bool Items::loadFromDat(std::string_view file)
 {
-	OTB::Loader loader{file, OTBI};
-
-	auto& root = loader.parseTree();
-
-	PropStream props;
-	if (loader.getProps(root, props)) {
-		// 4 byte flags
-		// attributes
-		// 0x01 = version data
-		uint32_t flags;
-		if (!props.read<uint32_t>(flags)) {
-			return false;
-		}
-
-		uint8_t attr;
-		if (!props.read<uint8_t>(attr)) {
-			return false;
-		}
-
-		if (attr == ROOT_ATTR_VERSION) {
-			uint16_t datalen;
-			if (!props.read<uint16_t>(datalen)) {
-				return false;
-			}
-
-			if (datalen != sizeof(VERSIONINFO)) {
-				return false;
-			}
-
-			VERSIONINFO vi;
-			if (!props.read(vi)) {
-				return false;
-			}
-
-			majorVersion = vi.dwMajorVersion; // items otb format file version
-			minorVersion = vi.dwMinorVersion; // client version
-			buildNumber = vi.dwBuildNumber;   // revision
-		}
-	}
-
-	if (majorVersion == 0xFFFFFFFF) {
-		LOG_WARN("[Warning - Items::loadFromOtb] items.otb using generic client version.");
-	} else if (majorVersion != 3) {
-		LOG_WARN("Old version detected, a newer version of items.otb is required.");
-		return false;
-	} else if (minorVersion < CLIENT_VERSION_860_OLD) {
-		LOG_WARN("A newer version of items.otb is required.");
+	const std::string filePath{file};
+	std::ifstream fin(filePath, std::ios::binary | std::ios::ate);
+	if (!fin) {
+		LOG_ERROR(fmt::format("[Error - Items::loadFromDat] Unable to load assets.dat from path: {}", filePath));
+		LOG_ERROR("[Error - Items::loadFromDat] Copy Tibia.dat from your client folder, rename it to assets.dat and place it in data/items/.");
 		return false;
 	}
 
-	for (auto& itemNode : root.children) {
-		PropStream stream;
-		if (!loader.getProps(itemNode, stream)) {
-			return false;
-		}
-
-		uint32_t flags;
-		if (!stream.read<uint32_t>(flags)) {
-			return false;
-		}
-
-		uint16_t ignoredLegacyId = 0;
-		uint16_t clientId = 0;
-		uint16_t speed = 0;
-		uint16_t wareId = 0;
-		uint8_t lightLevel = 0;
-		uint8_t lightColor = 0;
-		uint8_t alwaysOnTopOrder = 0;
-
-		uint8_t attrib;
-		while (stream.read<uint8_t>(attrib)) {
-			uint16_t datalen;
-			if (!stream.read<uint16_t>(datalen)) {
-				return false;
-			}
-
-			switch (attrib) {
-				case ITEM_ATTR_SERVERID: {
-					if (datalen != sizeof(uint16_t)) {
-						return false;
-					}
-
-					if (!stream.read<uint16_t>(ignoredLegacyId)) {
-						return false;
-					}
-					break;
-				}
-
-				case ITEM_ATTR_CLIENTID: {
-					if (datalen != sizeof(uint16_t)) {
-						return false;
-					}
-
-					if (!stream.read<uint16_t>(clientId)) {
-						return false;
-					}
-					break;
-				}
-
-				case ITEM_ATTR_SPEED: {
-					if (datalen != sizeof(uint16_t)) {
-						return false;
-					}
-
-					if (!stream.read<uint16_t>(speed)) {
-						return false;
-					}
-					break;
-				}
-
-				case ITEM_ATTR_LIGHT2: {
-					if (datalen != sizeof(lightBlock2)) {
-						return false;
-					}
-
-					lightBlock2 lb2;
-					if (!stream.read(lb2)) {
-						return false;
-					}
-
-					lightLevel = static_cast<uint8_t>(lb2.lightLevel);
-					lightColor = static_cast<uint8_t>(lb2.lightColor);
-					break;
-				}
-
-				case ITEM_ATTR_TOPORDER: {
-					if (datalen != sizeof(uint8_t)) {
-						return false;
-					}
-
-					if (!stream.read<uint8_t>(alwaysOnTopOrder)) {
-						return false;
-					}
-					break;
-				}
-
-				case ITEM_ATTR_WAREID: {
-					if (datalen != sizeof(uint16_t)) {
-						return false;
-					}
-
-					if (!stream.read<uint16_t>(wareId)) {
-						return false;
-					}
-					break;
-				}
-
-				case ITEM_ATTR_CLASSIFICATION: {
-					if (!stream.skip(1)) {
-						return false;
-					}
-					break;
-				}
-
-				default: {
-					// skip unknown attributes
-					if (!stream.skip(datalen)) {
-						return false;
-					}
-					break;
-				}
-			}
-		}
-
-		// store the found item
-		if (clientId >= items.size()) {
-			items.resize(clientId + 1);
-		}
-		ItemType& iType = items[clientId];
-
-		iType.group = static_cast<itemgroup_t>(itemNode.type);
-		switch (itemNode.type) {
-			case ITEM_GROUP_CONTAINER:
-				iType.type = ITEM_TYPE_CONTAINER;
-				break;
-			case ITEM_GROUP_DOOR:
-				// not used
-				iType.type = ITEM_TYPE_DOOR;
-				break;
-			case ITEM_GROUP_MAGICFIELD:
-				// not used
-				iType.type = ITEM_TYPE_MAGICFIELD;
-				break;
-			case ITEM_GROUP_TELEPORT:
-				// not used
-				iType.type = ITEM_TYPE_TELEPORT;
-				break;
-			case ITEM_GROUP_NONE:
-			case ITEM_GROUP_GROUND:
-			case ITEM_GROUP_SPLASH:
-			case ITEM_GROUP_FLUID:
-			case ITEM_GROUP_CHARGES:
-			case ITEM_GROUP_DEPRECATED:
-				break;
-			default:
-				return false;
-		}
-
-		iType.blockSolid = hasBitSet(FLAG_BLOCK_SOLID, flags);
-		iType.blockProjectile = hasBitSet(FLAG_BLOCK_PROJECTILE, flags);
-		iType.blockPathFind = hasBitSet(FLAG_BLOCK_PATHFIND, flags);
-		iType.hasHeight = hasBitSet(FLAG_HAS_HEIGHT, flags);
-		iType.useable = hasBitSet(FLAG_USEABLE, flags);
-		iType.pickupable = hasBitSet(FLAG_PICKUPABLE, flags);
-		iType.moveable = hasBitSet(FLAG_MOVEABLE, flags);
-		iType.stackable = hasBitSet(FLAG_STACKABLE, flags);
-
-		iType.alwaysOnTop = hasBitSet(FLAG_ALWAYSONTOP, flags);
-		iType.isVertical = hasBitSet(FLAG_VERTICAL, flags);
-		iType.isHorizontal = hasBitSet(FLAG_HORIZONTAL, flags);
-		iType.isHangable = hasBitSet(FLAG_HANGABLE, flags);
-		iType.allowDistRead = hasBitSet(FLAG_ALLOWDISTREAD, flags);
-		iType.rotatable = hasBitSet(FLAG_ROTATABLE, flags);
-		iType.canReadText = hasBitSet(FLAG_READABLE, flags);
-		iType.lookThrough = hasBitSet(FLAG_LOOKTHROUGH, flags);
-		iType.isAnimation = hasBitSet(FLAG_ANIMATION, flags);
-		// iType.walkStack = !hasBitSet(FLAG_FULLTILE, flags);
-		iType.forceUse = hasBitSet(FLAG_FORCEUSE, flags);
-
-		iType.id = clientId;
-		iType.speed = speed;
-		iType.lightLevel = lightLevel;
-		iType.lightColor = lightColor;
-		iType.wareId = wareId;
-		iType.alwaysOnTopOrder = alwaysOnTopOrder;
+	const std::streamoff endPosition = fin.tellg();
+	if (endPosition <= 0 || static_cast<uint64_t>(endPosition) > (std::numeric_limits<size_t>::max)()) {
+		LOG_ERROR(fmt::format("[Error - Items::loadFromDat] Invalid assets.dat size: {}", filePath));
+		return false;
 	}
 
+	const auto fileSize = static_cast<size_t>(endPosition);
+	fin.seekg(0, std::ios::beg);
+
+	std::vector<uint8_t> buffer(fileSize);
+	if (!fin.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(buffer.size()))) {
+		LOG_ERROR(fmt::format("[Error - Items::loadFromDat] Failed to read assets.dat: {}", filePath));
+		return false;
+	}
+
+	std::vector<ItemType> parsedItems;
+	uint16_t itemCount = 0;
+	size_t spriteIdBytes = sizeof(uint16_t);
+	if (!parseDatBuffer(buffer, sizeof(uint16_t), parsedItems, itemCount, false)) {
+		parsedItems.clear();
+		if (!parseDatBuffer(buffer, sizeof(uint32_t), parsedItems, itemCount, true)) {
+			LOG_ERROR(fmt::format("[Error - Items::loadFromDat] Invalid or unsupported assets.dat: {}", filePath));
+			return false;
+		}
+
+		spriteIdBytes = sizeof(uint32_t);
+	}
+
+	items = std::move(parsedItems);
 	items.shrink_to_fit();
+	LOG_INFO(fmt::format(">> Assets DAT: {:d} item client ids loaded (sprite ids: uint{:d}).", itemCount - 99,
+	                     static_cast<uint32_t>(spriteIdBytes * 8)));
 	return true;
 }
 

@@ -422,7 +422,7 @@ public:
 	bool pickupable = false;
 	bool rotatable = false;
 	bool useable = false;
-	bool moveable = false;
+	bool moveable = true;
 	bool alwaysOnTop = false;
 	bool canReadText = false;
 	bool canWriteText = false;
@@ -458,7 +458,7 @@ public:
 	bool reload();
 	void clear();
 
-	bool loadFromOtb(const std::string& file);
+	bool loadFromDat(std::string_view file);
 
 	const ItemType& operator[](size_t id) const { return getItemType(id); }
 	const ItemType& getItemType(size_t id) const;
@@ -466,9 +466,6 @@ public:
 
 	uint16_t getItemIdByName(const std::string& name);
 
-	uint32_t majorVersion = 0;
-	uint32_t minorVersion = 0;
-	uint32_t buildNumber = 0;
 
 	bool loadFromXml();
 	void parseItemNode(const pugi::xml_node& itemNode, uint16_t id);

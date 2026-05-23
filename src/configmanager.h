@@ -120,6 +120,7 @@ enum String
 	NPC_SYSTEM,
 	DUAL_WIELDING_MODE,
 	RAID_SPAWNFILE_DIRECTORY,
+	ASSETS_DAT_PATH,
 
 	LAST_STRING /* this must be the last one */
 };

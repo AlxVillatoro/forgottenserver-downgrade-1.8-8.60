@@ -172,12 +172,10 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 
 	// load item data
 	LOG_INFO(">> Loading items... ");
-	if (!Item::items.loadFromOtb("data/items/items.otb")) {
-		startupErrorMessage("Unable to load items (OTB)!");
+	if (!Item::items.loadFromDat(getString(ConfigManager::ASSETS_DAT_PATH))) {
+		startupErrorMessage("Unable to load items (DAT)! Copy 'Tibia.dat' from your client folder, rename it to 'assets.dat' and place it in 'data/items/'.");
 		return;
 	}
-	LOG_INFO(fmt::format(">> OTB v{:d}.{:d}.{:d}", Item::items.majorVersion, Item::items.minorVersion,
-	                         Item::items.buildNumber));
 
 	if (!Item::items.loadFromXml()) {
 		startupErrorMessage("Unable to load items (XML)!");
