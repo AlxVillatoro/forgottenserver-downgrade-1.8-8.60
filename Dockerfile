@@ -1,38 +1,64 @@
 FROM ubuntu:22.04 AS build
-ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl zip unzip tar build-essential cmake ninja-build pkg-config \
-    ca-certificates && rm -rf /var/lib/apt/lists/*
-# Instalar vcpkg
-WORKDIR /opt
-RUN git clone https://github.com/microsoft/vcpkg.git && cd vcpkg && ./bootstrap-vcpkg.sh
-ENV VCPKG_ROOT=/opt/vcpkg
-ENV PATH="${VCPKG_ROOT}:${PATH}"
-# Instalar dependencias del proyecto
-WORKDIR /usr/src/forgottenserver-downgrade
-COPY vcpkg.json ./
-RUN /opt/vcpkg/vcpkg install --triplet x64-linux
-# Copiar el resto del código
-COPY cmake /usr/src/forgottenserver-downgrade/cmake/
-COPY src /usr/src/forgottenserver-downgrade/src/
-COPY CMakeLists.txt /usr/src/forgottenserver-downgrade/
-WORKDIR /usr/src/forgottenserver-downgrade
-# Usar el flujo clásico de CMake con vcpkg toolchain
-RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
-    && cmake --build build --config RelWithDebInfo
 
-COPY src /usr/src/forgottenserver-downgrade/src/
-COPY CMakeLists.txt /usr/src/forgottenserver-downgrade/
+ENV DEBIAN_FRONTEND=noninteractive \
+    VCPKG_ROOT=/opt/vcpkg \
+    VCPKG_DEFAULT_TRIPLET=x64-linux
+ENV PATH="${VCPKG_ROOT}:${PATH}"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    autoconf \
+    automake \
+    bison \
+    build-essential \
+    ca-certificates \
+    curl \
+    flex \
+    git \
+    libtool \
+    ninja-build \
+    pkg-config \
+    python3 \
+    tar \
+    unzip \
+    zip \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+RUN git clone --depth 1 https://github.com/microsoft/vcpkg.git \
+    && ${VCPKG_ROOT}/bootstrap-vcpkg.sh
+
 WORKDIR /usr/src/forgottenserver-downgrade
-# Usar el flujo clásico de CMake para máxima compatibilidad
-RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    && cmake --build build --config RelWithDebInfo
+
+# Copy the vcpkg manifest first so dependency installation can be cached.
+COPY vcpkg.json ./
+RUN vcpkg install --triplet ${VCPKG_DEFAULT_TRIPLET}
+
+COPY cmake ./cmake
+COPY src ./src
+COPY CMakeLists.txt ./
+
+RUN cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DCMAKE_TOOLCHAIN_FILE=${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake \
+      -DVCPKG_TARGET_TRIPLET=${VCPKG_DEFAULT_TRIPLET} \
+      -DENABLE_NATIVE_OPTIMIZATIONS=OFF \
+      -DSKIP_GIT=ON \
+    && cmake --build build --config RelWithDebInfo --target tfs --parallel
 
 FROM ubuntu:22.04
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libgcc-s1 \
+    libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /usr/src/forgottenserver-downgrade/build/tfs /bin/tfs
 COPY data /srv/data/
 COPY LICENSE README.md *.dist *.sql key.pem /srv/
+
 EXPOSE 7171 7172
 WORKDIR /srv
 VOLUME /srv
