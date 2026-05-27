@@ -105,7 +105,7 @@ public:
         map->spawns.loadFromXml(map->spawnfile.string());
 
         // Also try Canary/Crystal-style monster+npc files
-        std::string mapName = getString(ConfigManager::MAP_NAME);
+        std::string mapName(getString(ConfigManager::MAP_NAME));
         map->spawns.loadFromMonsterNpcXml(mapName + "-monster.xml");
         map->spawns.loadFromMonsterNpcXml(mapName + "-npc.xml");
 
