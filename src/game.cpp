@@ -1035,22 +1035,22 @@ void Game::playerMoveCreature(Player* player, Creature* movingCreature, const Po
 
 	if (player != movingCreature) {
 		if (getBoolean(ConfigManager::PUSH_CREATURE_ZONE)) {
-			if (player->getZone() == ZONE_PROTECTION && movingCreature->isPlayer()) {
+			if (player->getZone() == ZONE_PROTECTION && movingCreature->getPlayer()) {
 				player->sendCancelMessage("You cannot move players who are in a Protection Zone.");
 				return;
 			}
 
-			if (player->getZone() == ZONE_NOPVP && movingCreature->isPlayer()) {
+			if (player->getZone() == ZONE_NOPVP && movingCreature->getPlayer()) {
 				player->sendCancelMessage("You cannot move players who are in a Zone No-PvP.");
 				return;
 			}
 
-			if (movingCreature->getZone() == ZONE_PROTECTION && movingCreature->isPlayer()) {
+			if (movingCreature->getZone() == ZONE_PROTECTION && movingCreature->getPlayer()) {
 				player->sendCancelMessage("You cannot move players who are in a Protection Zone.");
 				return;
 			}
 
-			if (movingCreature->getZone() == ZONE_NOPVP && movingCreature->isPlayer()) {
+			if (movingCreature->getZone() == ZONE_NOPVP && movingCreature->getPlayer()) {
 				player->sendCancelMessage("You cannot move players who are in a Zone No-PvP.");
 				return;
 			}
@@ -3008,7 +3008,7 @@ void Game::playerUseWithCreature(uint32_t playerId, const Position& fromPos, uin
 
 	bool isHotkey = (fromPos.x == 0xFFFF && fromPos.y == 0 && fromPos.z == 0);
 	if (!getBoolean(ConfigManager::AIMBOT_HOTKEY_ENABLED)) {
-		if (creature->isPlayer() || isHotkey) {
+		if (creature->getPlayer() || isHotkey) {
 			player->sendCancelMessage(RETURNVALUE_DIRECTPLAYERSHOOT);
 			return;
 		}
@@ -4799,7 +4799,7 @@ bool Game::combatBlockHit(CombatDamage& damage, Creature* attacker, Creature* ta
 		return true;
 	}
 
-	if (target->isPlayer() && target->isInGhostMode()) {
+	if (target->getPlayer() && target->isInGhostMode()) {
 		return true;
 	}
 
