@@ -645,10 +645,14 @@ float Player::getMitigation() const
 	getShieldAndWeapon(shield, weapon);
 
 	if (shield) {
-		return (shieldingSkill * vocation->primaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f;
+		return std::max(0.0f,
+		                ((shieldingSkill * vocation->primaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f) +
+		                    varMitigation);
 	}
 
-	return (shieldingSkill * vocation->secondaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f;
+	return std::max(0.0f,
+	                ((shieldingSkill * vocation->secondaryShieldMultiplier + armor * vocation->mitigationMultiplier) / 100.0f) +
+	                    varMitigation);
 }
 
 void Player::getShieldAndWeapon(const Item*& shield, const Item*& weapon) const

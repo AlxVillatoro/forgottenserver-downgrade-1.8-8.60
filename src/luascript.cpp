@@ -1570,6 +1570,7 @@ void LuaScriptInterface::registerFunctions()
 	registerGlobalVariable("IMBUEMENT_SYSTEM_ENABLED", ConfigManager::IMBUEMENT_SYSTEM_ENABLED);
 	registerGlobalVariable("MONK_VOCATION_ENABLED", ConfigManager::MONK_VOCATION_ENABLED);
 	registerGlobalVariable("FAMILIAR_SYSTEM_ENABLED", ConfigManager::FAMILIAR_SYSTEM_ENABLED);
+	registerGlobalVariable("WHEEL_SYSTEM_ENABLED", ConfigManager::WHEEL_SYSTEM_ENABLED);
 	registerGlobalVariable("BESTIARY_SYSTEM_ENABLED", ConfigManager::BESTIARY_SYSTEM_ENABLED);
 	registerGlobalVariable("MARKET_SYSTEM_ENABLED", ConfigManager::MARKET_SYSTEM_ENABLED);
 	registerGlobalVariable("PREY_SYSTEM_ENABLED", ConfigManager::PREY_SYSTEM_ENABLED);
@@ -2758,6 +2759,7 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::IMBUEMENT_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MONK_VOCATION_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::FAMILIAR_SYSTEM_ENABLED);
+	registerEnumIn("configKeys", ConfigManager::WHEEL_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::CHAIN_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::BESTIARY_SYSTEM_ENABLED);
 	registerEnumIn("configKeys", ConfigManager::MARKET_SYSTEM_ENABLED);

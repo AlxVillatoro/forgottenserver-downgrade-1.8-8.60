@@ -1,3 +1,8 @@
+local wheelSystemConfigKey = configKeys and configKeys.WHEEL_SYSTEM_ENABLED or WHEEL_SYSTEM_ENABLED
+if wheelSystemConfigKey and not configManager.getBoolean(wheelSystemConfigKey) then
+	return
+end
+
 local OPCODE_WHEEL_OPEN = 0x61
 local OPCODE_WHEEL_SAVE = 0x62
 local OPCODE_WHEEL_GEM_ACTION = 0xE7
@@ -8,6 +13,8 @@ local WHEEL_MIN_LEVEL = 51
 local WHEEL_POINTS_PER_LEVEL = 1
 local WHEEL_SLOT_COUNT = 36
 local WHEEL_NO_GEM = 0
+local WHEEL_REQUIRE_PROMOTION = true
+local WHEEL_CONDITION_SUBID = 86061
 
 local RESOURCE_BANK = 0
 local RESOURCE_INVENTORY = 1
@@ -28,6 +35,20 @@ local GEM_ITEMS = {
 	[5] = { 49371, 49372, 49373 }, -- Monk
 }
 
+local PROMOTION_SCROLLS = {
+	[43946] = { name = "abridged", points = 3, itemName = "abridged promotion scroll" },
+	[43947] = { name = "basic", points = 5, itemName = "basic promotion scroll" },
+	[43948] = { name = "revised", points = 9, itemName = "revised promotion scroll" },
+	[43949] = { name = "extended", points = 13, itemName = "extended promotion scroll" },
+	[43950] = { name = "advanced", points = 20, itemName = "advanced promotion scroll" },
+}
+
+local PROMOTION_SCROLLS_BY_NAME = {}
+for itemId, scroll in pairs(PROMOTION_SCROLLS) do
+	scroll.itemId = itemId
+	PROMOTION_SCROLLS_BY_NAME[scroll.name] = scroll
+end
+
 local WHEEL_SLOT_MAX_POINTS = {
 	200, 150, 100, 100, 150, 200, 150, 100, 75,
 	75, 100, 150, 100, 75, 50, 50, 75, 100,
@@ -35,12 +56,72 @@ local WHEEL_SLOT_MAX_POINTS = {
 	75, 100, 150, 200, 150, 100, 100, 150, 200
 }
 
+local WHEEL_MAX_ALLOCATABLE_POINTS = 4000
+
 local WHEEL_SLOT_DOMAINS = {
 	1, 1, 1, 2, 2, 2, 1, 1, 1,
 	2, 2, 2, 1, 1, 1, 2, 2, 2,
 	3, 3, 4, 4, 4, 4, 3, 3, 3,
 	4, 4, 4, 3, 3, 3, 4, 4, 4
 }
+
+local WHEEL_SLOT_BONUSES = {
+	[1] = { dedication = "lifemana", conviction = "special_1" },
+	[2] = { dedication = "mitigation", conviction = "manaleech" },
+	[3] = { dedication = "health", conviction = "vessel" },
+	[4] = { dedication = "mana", conviction = "skill" },
+	[5] = { dedication = "health", conviction = "vessel" },
+	[6] = { dedication = "lifemana", conviction = "spell_1" },
+	[7] = { dedication = "mitigation", conviction = "vessel" },
+	[8] = { dedication = "health", conviction = "spell_2" },
+	[9] = { dedication = "mana", conviction = "lifeleech" },
+	[10] = { dedication = "capacity", conviction = "vessel" },
+	[11] = { dedication = "mana", conviction = "spell_3" },
+	[12] = { dedication = "health", conviction = "manaleech" },
+	[13] = { dedication = "health", conviction = "spell_4" },
+	[14] = { dedication = "mana", conviction = "skill" },
+	[15] = { dedication = "capacity", conviction = "vessel" },
+	[16] = { dedication = "mitigation", conviction = "spell_5" },
+	[17] = { dedication = "capacity", conviction = "lifeleech" },
+	[18] = { dedication = "mana", conviction = "vessel" },
+	[19] = { dedication = "mitigation", conviction = "vessel" },
+	[20] = { dedication = "health", conviction = "manaleech" },
+	[21] = { dedication = "mana", conviction = "spell_1" },
+	[22] = { dedication = "health", conviction = "vessel" },
+	[23] = { dedication = "mitigation", conviction = "skill" },
+	[24] = { dedication = "capacity", conviction = "spell_2" },
+	[25] = { dedication = "capacity", conviction = "lifeleech" },
+	[26] = { dedication = "mitigation", conviction = "spell_3" },
+	[27] = { dedication = "health", conviction = "vessel" },
+	[28] = { dedication = "mitigation", conviction = "manaleech" },
+	[29] = { dedication = "capacity", conviction = "spell_4" },
+	[30] = { dedication = "mana", conviction = "vessel" },
+	[31] = { dedication = "lifemana", conviction = "spell_5" },
+	[32] = { dedication = "capacity", conviction = "vessel" },
+	[33] = { dedication = "mitigation", conviction = "skill" },
+	[34] = { dedication = "capacity", conviction = "vessel" },
+	[35] = { dedication = "mana", conviction = "lifeleech" },
+	[36] = { dedication = "lifemana", conviction = "special_2" },
+}
+
+local WHEEL_DEDICATION_VALUES = {
+	health = { 3, 2, 1, 1, 2 },
+	mana = { 1, 3, 6, 6, 2 },
+	capacity = { 5, 4, 2, 2, 5 },
+	lifemana = {
+		health = { 3, 2, 1, 1, 2 },
+		mana = { 1, 3, 6, 6, 2 },
+	},
+}
+
+local WHEEL_CONVICTION_VALUES = {
+	lifeleech = 75,
+	manaleech = 25,
+	skill = 1,
+}
+
+local WHEEL_APPLIED_SPECIAL_MAGIC = {}
+local WHEEL_APPLIED_MITIGATION = {}
 
 local WHEEL_SLOT_PREREQUISITES = {
 	[1] = { 2, 7 },
@@ -85,6 +166,10 @@ local function wheelKV(player)
 	return player:kv():scoped("wheel")
 end
 
+local function scrollKV(player)
+	return wheelKV(player):scoped("scrolls")
+end
+
 local function clampU16(value)
 	value = math.floor(tonumber(value) or 0)
 	if value < 0 then
@@ -94,6 +179,44 @@ local function clampU16(value)
 		return 0xFFFF
 	end
 	return value
+end
+
+local function getUnlockedScrolls(player)
+	local store = scrollKV(player)
+	local unlocked = {}
+	for itemId, scroll in pairs(PROMOTION_SCROLLS) do
+		if store:get(scroll.name) == true then
+			unlocked[#unlocked + 1] = {
+				itemId = itemId,
+				name = scroll.name,
+				points = scroll.points,
+			}
+		end
+	end
+
+	table.sort(unlocked, function(a, b)
+		return a.itemId < b.itemId
+	end)
+	return unlocked
+end
+
+local function unlockWheelScroll(player, scrollName)
+	local scroll = PROMOTION_SCROLLS_BY_NAME[scrollName]
+	if not scroll then
+		return false
+	end
+
+	local store = scrollKV(player)
+	if store:get(scroll.name) == true then
+		return false
+	end
+
+	store:set(scroll.name, true)
+	return true
+end
+
+function Player.wheelUnlockScroll(self, scrollName)
+	return unlockWheelScroll(self, scrollName)
 end
 
 local function getWheelVocation(player)
@@ -114,7 +237,20 @@ local function getWheelVocation(player)
 end
 
 local function getWheelPoints(player)
-	return clampU16(math.max(0, (player:getLevel() - (WHEEL_MIN_LEVEL - 1)) * WHEEL_POINTS_PER_LEVEL))
+	local levelPoints = math.max(0, (player:getLevel() - (WHEEL_MIN_LEVEL - 1)) * WHEEL_POINTS_PER_LEVEL)
+	return clampU16(math.min(WHEEL_MAX_ALLOCATABLE_POINTS, levelPoints))
+end
+
+local function getWheelExtraPoints(player)
+	local total = 0
+	for _, scroll in ipairs(getUnlockedScrolls(player)) do
+		total = total + scroll.points
+	end
+	return clampU16(math.min(total, math.max(0, WHEEL_MAX_ALLOCATABLE_POINTS - getWheelPoints(player))))
+end
+
+local function getWheelTotalPoints(player)
+	return clampU16(math.min(WHEEL_MAX_ALLOCATABLE_POINTS, getWheelPoints(player) + getWheelExtraPoints(player)))
 end
 
 local function hasWheelPremium(player)
@@ -122,7 +258,18 @@ local function hasWheelPremium(player)
 end
 
 local function isWheelPromoted(player)
-	return not player.isPromoted or player:isPromoted()
+	if not WHEEL_REQUIRE_PROMOTION then
+		return true
+	end
+
+	if not player.isPromoted then
+		return false
+	end
+
+	local ok, promoted = pcall(function()
+		return player:isPromoted()
+	end)
+	return ok and promoted == true
 end
 
 local function canOpenWheel(player)
@@ -239,6 +386,170 @@ local function saveProfile(player, points, gems)
 	store:set("savedAt", os.time())
 end
 
+local function addBonus(bonuses, key, value)
+	if value and value ~= 0 then
+		bonuses[key] = (bonuses[key] or 0) + value
+	end
+end
+
+local function addSpecialMagicBonus(bonuses, combatType, value)
+	if not combatType or not value or value == 0 then
+		return
+	end
+
+	bonuses.specialMagic[combatType] = (bonuses.specialMagic[combatType] or 0) + value
+end
+
+local function calculateWheelBonuses(player, points)
+	local vocationId = getWheelVocation(player)
+	local bonuses = {
+		health = 0,
+		mana = 0,
+		capacity = 0,
+		magic = 0,
+		melee = 0,
+		distance = 0,
+		fist = 0,
+		lifeLeech = 0,
+		manaLeech = 0,
+		mitigation = 0,
+		specialMagic = {},
+	}
+
+	if vocationId == 0 then
+		return bonuses
+	end
+
+	for slot = 1, WHEEL_SLOT_COUNT do
+		local invested = points[slot] or 0
+		local slotBonus = WHEEL_SLOT_BONUSES[slot]
+		if invested > 0 and slotBonus then
+			local dedication = slotBonus.dedication
+			if dedication == "health" then
+				addBonus(bonuses, "health", invested * (WHEEL_DEDICATION_VALUES.health[vocationId] or 0))
+			elseif dedication == "mana" then
+				addBonus(bonuses, "mana", invested * (WHEEL_DEDICATION_VALUES.mana[vocationId] or 0))
+			elseif dedication == "capacity" then
+				addBonus(bonuses, "capacity", invested * (WHEEL_DEDICATION_VALUES.capacity[vocationId] or 0))
+			elseif dedication == "lifemana" then
+				addBonus(bonuses, "health", invested * (WHEEL_DEDICATION_VALUES.lifemana.health[vocationId] or 0))
+				addBonus(bonuses, "mana", invested * (WHEEL_DEDICATION_VALUES.lifemana.mana[vocationId] or 0))
+			elseif dedication == "mitigation" then
+				bonuses.mitigation = bonuses.mitigation + invested * 0.03
+			end
+		end
+
+		if invested >= (WHEEL_SLOT_MAX_POINTS[slot] or 0) and slotBonus then
+			local conviction = slotBonus.conviction
+			if conviction == "lifeleech" then
+				addBonus(bonuses, "lifeLeech", WHEEL_CONVICTION_VALUES.lifeleech)
+			elseif conviction == "manaleech" then
+				addBonus(bonuses, "manaLeech", WHEEL_CONVICTION_VALUES.manaleech)
+			elseif conviction == "skill" then
+				if vocationId == 1 then
+					addBonus(bonuses, "melee", WHEEL_CONVICTION_VALUES.skill)
+				elseif vocationId == 2 then
+					addBonus(bonuses, "distance", WHEEL_CONVICTION_VALUES.skill)
+				elseif vocationId == 3 or vocationId == 4 then
+					addBonus(bonuses, "magic", WHEEL_CONVICTION_VALUES.skill)
+				elseif vocationId == 5 then
+					addBonus(bonuses, "fist", WHEEL_CONVICTION_VALUES.skill)
+				end
+			elseif conviction == "special_1" and vocationId == 2 then
+				addSpecialMagicBonus(bonuses, COMBAT_HOLYDAMAGE, 3)
+				addSpecialMagicBonus(bonuses, COMBAT_HEALING, 3)
+			end
+		end
+	end
+
+	return bonuses
+end
+
+local function removeAppliedSpecialMagic(player)
+	local applied = WHEEL_APPLIED_SPECIAL_MAGIC[player:getId()]
+	if not applied or not player.addSpecialMagicLevel then
+		WHEEL_APPLIED_SPECIAL_MAGIC[player:getId()] = nil
+		return
+	end
+
+	for combatType, value in pairs(applied) do
+		if value ~= 0 then
+			player:addSpecialMagicLevel(combatType, -value)
+		end
+	end
+	WHEEL_APPLIED_SPECIAL_MAGIC[player:getId()] = nil
+end
+
+local function removeAppliedMitigation(player)
+	local applied = WHEEL_APPLIED_MITIGATION[player:getId()]
+	if applied and applied ~= 0 and player.addMitigation then
+		player:addMitigation(-applied)
+	end
+	WHEEL_APPLIED_MITIGATION[player:getId()] = nil
+end
+
+local function removeWheelBonuses(player)
+	player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, WHEEL_CONDITION_SUBID, true)
+	removeAppliedSpecialMagic(player)
+	removeAppliedMitigation(player)
+end
+
+local function setConditionBonus(condition, parameter, value)
+	if value and value ~= 0 then
+		condition:setParameter(parameter, value)
+		return true
+	end
+	return false
+end
+
+local function applyWheelBonuses(player)
+	removeWheelBonuses(player)
+
+	local profile = loadProfile(player)
+	local bonuses = calculateWheelBonuses(player, profile.points)
+	wheelKV(player):set("bonusStats", bonuses)
+
+	local condition = Condition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT)
+	condition:setParameter(CONDITION_PARAM_SUBID, WHEEL_CONDITION_SUBID)
+	condition:setParameter(CONDITION_PARAM_TICKS, -1)
+
+	local hasConditionBonus = false
+	hasConditionBonus = setConditionBonus(condition, CONDITION_PARAM_STAT_MAXHITPOINTS, bonuses.health) or hasConditionBonus
+	hasConditionBonus = setConditionBonus(condition, CONDITION_PARAM_STAT_MAXMANAPOINTS, bonuses.mana) or hasConditionBonus
+	hasConditionBonus = setConditionBonus(condition, CONDITION_PARAM_STAT_CAPACITY, bonuses.capacity) or hasConditionBonus
+	hasConditionBonus = setConditionBonus(condition, CONDITION_PARAM_STAT_MAGICPOINTS, bonuses.magic) or hasConditionBonus
+	hasConditionBonus = setConditionBonus(condition, CONDITION_PARAM_SKILL_MELEE, bonuses.melee) or hasConditionBonus
+	hasConditionBonus = setConditionBonus(condition, CONDITION_PARAM_SKILL_DISTANCE, bonuses.distance) or hasConditionBonus
+	hasConditionBonus = setConditionBonus(condition, CONDITION_PARAM_SKILL_FIST, bonuses.fist) or hasConditionBonus
+	hasConditionBonus = setConditionBonus(condition, CONDITION_PARAM_SPECIALSKILL_LIFELEECHAMOUNT, bonuses.lifeLeech) or hasConditionBonus
+	hasConditionBonus = setConditionBonus(condition, CONDITION_PARAM_SPECIALSKILL_MANALEECHAMOUNT, bonuses.manaLeech) or hasConditionBonus
+
+	if hasConditionBonus then
+		player:addCondition(condition)
+	end
+
+	if player.addSpecialMagicLevel then
+		WHEEL_APPLIED_SPECIAL_MAGIC[player:getId()] = bonuses.specialMagic
+		for combatType, value in pairs(bonuses.specialMagic) do
+			if value ~= 0 then
+				player:addSpecialMagicLevel(combatType, value)
+			end
+		end
+	end
+
+	if bonuses.mitigation ~= 0 and player.addMitigation then
+		WHEEL_APPLIED_MITIGATION[player:getId()] = bonuses.mitigation
+		player:addMitigation(bonuses.mitigation)
+	end
+
+	player:reloadData()
+	return bonuses
+end
+
+function Player.wheelApplyBonuses(self)
+	return applyWheelBonuses(self)
+end
+
 local function validatePoints(player, points)
 	local total = 0
 	for slot = 1, WHEEL_SLOT_COUNT do
@@ -249,7 +560,7 @@ local function validatePoints(player, points)
 		total = total + value
 	end
 
-	if total > getWheelPoints(player) then
+	if total > getWheelTotalPoints(player) then
 		return false, "Not enough promotion points."
 	end
 
@@ -317,17 +628,21 @@ local function sendWheelWindow(player, ownerId)
 	end
 
 	local profile = loadProfile(player)
+	local unlockedScrolls = getUnlockedScrolls(player)
 	local canEdit = ownerId == player:getId()
 	out:addByte(canEdit and 1 or 0)
 	out:addByte(vocationId)
 	out:addU16(getWheelPoints(player))
-	out:addU16(0) -- extra points from gems/scrolls are not generated by this 8.60 adapter.
+	out:addU16(getWheelExtraPoints(player))
 
 	for slot = 1, WHEEL_SLOT_COUNT do
 		out:addU16(profile.points[slot] or 0)
 	end
 
-	out:addU16(0) -- promotion scroll count
+	out:addU16(#unlockedScrolls)
+	for _, scroll in ipairs(unlockedScrolls) do
+		out:addU16(scroll.itemId)
+	end
 	out:addByte(0) -- active gem count
 	out:addU16(0) -- revealed gem count
 	out:addByte(0) -- basic upgrade count
@@ -398,7 +713,7 @@ function saveHandler.onReceive(player, msg)
 	end
 
 	saveProfile(player, points, gems)
-	player:reloadData()
+	applyWheelBonuses(player)
 	sendWheelWindow(player, player:getId())
 end
 
@@ -421,3 +736,23 @@ function gemActionHandler.onReceive(player, msg)
 end
 
 gemActionHandler:register()
+
+local wheelLoginEvent = CreatureEvent("WheelOfDestinyLogin")
+
+function wheelLoginEvent.onLogin(player)
+	player:registerEvent("WheelOfDestinyLogout")
+	applyWheelBonuses(player)
+	return true
+end
+
+wheelLoginEvent:register()
+
+local wheelLogoutEvent = CreatureEvent("WheelOfDestinyLogout")
+
+function wheelLogoutEvent.onLogout(player)
+	WHEEL_APPLIED_SPECIAL_MAGIC[player:getId()] = nil
+	WHEEL_APPLIED_MITIGATION[player:getId()] = nil
+	return true
+end
+
+wheelLogoutEvent:register()

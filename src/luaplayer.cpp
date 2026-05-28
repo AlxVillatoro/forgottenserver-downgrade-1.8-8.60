@@ -789,6 +789,60 @@ int luaPlayerAddSpecialSkill(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetSpecialMagicLevel(lua_State* L)
+{
+	// player:getSpecialMagicLevel(combatType)
+	CombatType_t combatType = getInteger<CombatType_t>(L, 2);
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, player->getSpecialMagicLevel(combatType));
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerAddSpecialMagicLevel(lua_State* L)
+{
+	// player:addSpecialMagicLevel(combatType, value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->setSpecialMagicLevelSkill(getInteger<CombatType_t>(L, 2), getInteger<int16_t>(L, 3));
+	player->sendSkills();
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerGetMitigation(lua_State* L)
+{
+	// player:getMitigation()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushnumber(L, player->getMitigation());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerAddMitigation(lua_State* L)
+{
+	// player:addMitigation(value)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->addMitigation(getNumber<float>(L, 2));
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerGetItemCount(lua_State* L)
 {
 	// player:getItemCount(itemId[, subType = -1[, ignoreEquipped = false]])
@@ -3873,6 +3927,10 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "removeSkillTries", luaPlayerRemoveSkillTries);
 	registerMethod("Player", "getSpecialSkill", luaPlayerGetSpecialSkill);
 	registerMethod("Player", "addSpecialSkill", luaPlayerAddSpecialSkill);
+	registerMethod("Player", "getSpecialMagicLevel", luaPlayerGetSpecialMagicLevel);
+	registerMethod("Player", "addSpecialMagicLevel", luaPlayerAddSpecialMagicLevel);
+	registerMethod("Player", "getMitigation", luaPlayerGetMitigation);
+	registerMethod("Player", "addMitigation", luaPlayerAddMitigation);
 
 	registerMethod("Player", "getItemCount", luaPlayerGetItemCount);
 	registerMethod("Player", "getItemById", luaPlayerGetItemById);
