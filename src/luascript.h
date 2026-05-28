@@ -379,13 +379,14 @@ public:
 		return 0;
 	}
 
-	// Push shared_ptr<T> as a borrowed Lua userdata through the aliasing constructor.
-	// Use only when lifetime is guaranteed externally by the caller.
+	// Push a co-owning shared_ptr<T> into Lua full userdata.
+	// Copies the shared_ptr and increments its refcount, so Lua extends the lifetime until __gc.
+	// Uses std::construct_at; this project is C++23.
 	template<typename T>
-	static void pushBorrowedSharedPtr(lua_State* L, const std::shared_ptr<T>& ptr)
+	static void pushSharedPtrCopy(lua_State* L, const std::shared_ptr<T>& ptr)
 	{
 		auto* userdata = static_cast<std::shared_ptr<T>*>(lua_newuserdatauv(L, sizeof(std::shared_ptr<T>), 0));
-		std::construct_at(userdata, ptr, ptr.get());
+		std::construct_at(userdata, ptr);
 	}
 
 	static int luaLogMigration(lua_State* L);

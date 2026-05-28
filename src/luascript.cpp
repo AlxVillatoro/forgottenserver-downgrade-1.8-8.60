@@ -994,9 +994,9 @@ void Lua::setItemMetatable(lua_State* L, int32_t index, const Item* item)
 
 void Lua::setCreatureMetatable(lua_State* L, int32_t index, const Creature* creature)
 {
-	if (creature->getPlayer()) {
+	if (creature->isPlayer()) {
 		luaL_getmetatable(L, "Player");
-	} else if (creature->getMonster()) {
+	} else if (creature->isMonster()) {
 		luaL_getmetatable(L, "Monster");
 	} else {
 		luaL_getmetatable(L, "Npc");
