@@ -998,8 +998,12 @@ void Lua::setCreatureMetatable(lua_State* L, int32_t index, const Creature* crea
 		luaL_getmetatable(L, "Player");
 	} else if (creature->isMonster()) {
 		luaL_getmetatable(L, "Monster");
-	} else {
+	} else if (creature->isNpc()) {
 		luaL_getmetatable(L, "Npc");
+	} else {
+		assert(false && "Unknown creature type in Lua::setCreatureMetatable");
+		LOG_ERROR("[Lua::setCreatureMetatable] Unknown creature type: {}", static_cast<int32_t>(creature->getType()));
+		luaL_getmetatable(L, "Creature");
 	}
 	lua_setmetatable(L, index - 1);
 
