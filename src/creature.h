@@ -128,6 +128,12 @@ public:
 
 	virtual CreatureType_t getType() const = 0;
 
+	// Raw type checks: no shared_from_this(), no dynamic_cast.
+	// Use for type-only checks; use getPlayer()/getMonster()/getNpc() when the pointer is needed.
+	[[nodiscard]] bool isPlayer() const noexcept { return getType() == CREATURETYPE_PLAYER; }
+	[[nodiscard]] bool isMonster() const noexcept { return getType() == CREATURETYPE_MONSTER; }
+	[[nodiscard]] bool isNpc() const noexcept { return getType() == CREATURETYPE_NPC; }
+
 	virtual void setID() = 0;
 	void setRemoved()
 	{

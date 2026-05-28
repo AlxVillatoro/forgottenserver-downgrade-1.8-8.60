@@ -4125,7 +4125,7 @@ int luaPlayerKV(lua_State* L) {
 	}
 
 	auto scoped = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", player->getGUID()));
-	Lua::pushSharedPtr(L, scoped);
+	LuaScriptInterface::pushBorrowedSharedPtr(L, scoped);
 	Lua::setMetatable(L, -1, "KV");
 	return 1;
 }

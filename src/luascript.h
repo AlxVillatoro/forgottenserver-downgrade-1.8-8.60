@@ -11,6 +11,8 @@
 #include "position.h"
 #include "spectators.h"
 
+#include <memory>
+
 #if LUA_VERSION_NUM >= 502
 #ifndef LUA_COMPAT_ALL
 #ifndef LUA_COMPAT_MODULE
@@ -364,6 +366,28 @@ public:
 
 	static int protectedCall(lua_State* L, int nargs, int nresults);
 
+	// Typed GC finalizer for std::shared_ptr<T> stored as Lua full userdata.
+	// destroy_at + construct_at makes a second __gc call a safe no-op.
+	template<typename T>
+	static int luaSharedPtrGC(lua_State* L)
+	{
+		auto* ptr = static_cast<std::shared_ptr<T>*>(lua_touserdata(L, 1));
+		if (ptr) {
+			std::destroy_at(ptr);
+			std::construct_at(ptr);
+		}
+		return 0;
+	}
+
+	// Push shared_ptr<T> as a borrowed Lua userdata through the aliasing constructor.
+	// Use only when lifetime is guaranteed externally by the caller.
+	template<typename T>
+	static void pushBorrowedSharedPtr(lua_State* L, const std::shared_ptr<T>& ptr)
+	{
+		auto* userdata = static_cast<std::shared_ptr<T>*>(lua_newuserdatauv(L, sizeof(std::shared_ptr<T>), 0));
+		std::construct_at(userdata, ptr, ptr.get());
+	}
+
 	static int luaLogMigration(lua_State* L);
 
 	static std::string_view getErrorDesc(LuaErrorCode code);
@@ -525,7 +549,6 @@ private:
 	static int luaKVGet(lua_State* L);
 	static int luaKVKeys(lua_State* L);
 	static int luaKVRemove(lua_State* L);
-	static int luaKVGC(lua_State* L);
 
     // global helper declared to satisfy registration in luascript.cpp
     static int luaTransformToSHA1(lua_State* L);

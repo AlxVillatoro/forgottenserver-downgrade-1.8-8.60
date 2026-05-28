@@ -98,7 +98,6 @@ int luaSetMonsterLevelSkullRange(lua_State* L)
 	Lua::pushBoolean(L, true);
 	return 1;
 }
-
 int luaSetMonsterLevelBonus(lua_State* L)
 {
 	// setMonsterLevelBonus(bonusType, value)
@@ -995,9 +994,9 @@ void Lua::setItemMetatable(lua_State* L, int32_t index, const Item* item)
 
 void Lua::setCreatureMetatable(lua_State* L, int32_t index, const Creature* creature)
 {
-	if (creature->getPlayer()) {
+	if (creature->isPlayer()) {
 		luaL_getmetatable(L, "Player");
-	} else if (creature->getMonster()) {
+	} else if (creature->isMonster()) {
 		luaL_getmetatable(L, "Monster");
 	} else {
 		luaL_getmetatable(L, "Npc");
@@ -3226,7 +3225,6 @@ int LuaScriptInterface::luaGetSubTypeName(lua_State* L)
 	}
 	return 1;
 }
-
 bool LuaScriptInterface::getArea(lua_State* L, std::vector<uint32_t>& vec, uint32_t& rows)
 {
 	lua_pushnil(L);
@@ -4314,7 +4312,7 @@ void LuaScriptInterface::registerKV() {
 
 	// KV metatable for scoped userdata
 	registerClass("KV", "", nullptr);
-	registerMetaMethod("KV", "__gc", LuaScriptInterface::luaKVGC);
+	registerMetaMethod("KV", "__gc", LuaScriptInterface::luaSharedPtrGC<KV>);
 	registerMethod("KV", "scoped", LuaScriptInterface::luaKVScoped);
 	registerMethod("KV", "set", LuaScriptInterface::luaKVSet);
 	registerMethod("KV", "get", LuaScriptInterface::luaKVGet);
@@ -4429,12 +4427,4 @@ int LuaScriptInterface::luaKVKeys(lua_State* L) {
 		lua_rawseti(L, -2, ++index);
 	}
 	return 1;
-}
-
-int LuaScriptInterface::luaKVGC(lua_State* L) {
-	auto* ptr = static_cast<std::shared_ptr<KV>*>(lua_touserdata(L, 1));
-	if (ptr) {
-		std::destroy_at(ptr);
-	}
-	return 0;
 }
