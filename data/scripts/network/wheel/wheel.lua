@@ -166,6 +166,17 @@ local function wheelKV(player)
 	return player:kv():scoped("wheel")
 end
 
+local function wheelAppliedKV(player)
+	return wheelKV(player):scoped("applied")
+end
+
+local function getWheelPlayerKey(player)
+	if player.getGuid then
+		return player:getGuid()
+	end
+	return player:getId()
+end
+
 local function scrollKV(player)
 	return wheelKV(player):scoped("scrolls")
 end
@@ -383,6 +394,7 @@ local function saveProfile(player, points, gems)
 	store:set("revelationStages", stages)
 	store:set("usedPoints", usedPoints)
 	store:set("vocation", getWheelVocation(player))
+	store:set("conditionSubId", WHEEL_CONDITION_SUBID)
 	store:set("savedAt", os.time())
 end
 
@@ -466,9 +478,10 @@ local function calculateWheelBonuses(player, points)
 end
 
 local function removeAppliedSpecialMagic(player)
-	local applied = WHEEL_APPLIED_SPECIAL_MAGIC[player:getId()]
+	local key = getWheelPlayerKey(player)
+	local applied = WHEEL_APPLIED_SPECIAL_MAGIC[key]
 	if not applied or not player.addSpecialMagicLevel then
-		WHEEL_APPLIED_SPECIAL_MAGIC[player:getId()] = nil
+		WHEEL_APPLIED_SPECIAL_MAGIC[key] = nil
 		return
 	end
 
@@ -477,21 +490,29 @@ local function removeAppliedSpecialMagic(player)
 			player:addSpecialMagicLevel(combatType, -value)
 		end
 	end
-	WHEEL_APPLIED_SPECIAL_MAGIC[player:getId()] = nil
+	WHEEL_APPLIED_SPECIAL_MAGIC[key] = nil
 end
 
 local function removeAppliedMitigation(player)
-	local applied = WHEEL_APPLIED_MITIGATION[player:getId()]
+	local key = getWheelPlayerKey(player)
+	local applied = WHEEL_APPLIED_MITIGATION[key]
 	if applied and applied ~= 0 and player.addMitigation then
 		player:addMitigation(-applied)
 	end
-	WHEEL_APPLIED_MITIGATION[player:getId()] = nil
+	WHEEL_APPLIED_MITIGATION[key] = nil
 end
 
 local function removeWheelBonuses(player)
 	player:removeCondition(CONDITION_ATTRIBUTES, CONDITIONID_DEFAULT, WHEEL_CONDITION_SUBID, true)
 	removeAppliedSpecialMagic(player)
 	removeAppliedMitigation(player)
+
+	local appliedStore = wheelAppliedKV(player)
+	appliedStore:set("conditionSubId", WHEEL_CONDITION_SUBID)
+	appliedStore:set("conditionApplied", false)
+	appliedStore:set("specialMagic", {})
+	appliedStore:set("mitigation", 0)
+	appliedStore:set("updatedAt", os.time())
 end
 
 local function setConditionBonus(condition, parameter, value)
@@ -528,19 +549,36 @@ local function applyWheelBonuses(player)
 		player:addCondition(condition)
 	end
 
+	local key = getWheelPlayerKey(player)
+	local appliedSpecialMagic = {}
 	if player.addSpecialMagicLevel then
-		WHEEL_APPLIED_SPECIAL_MAGIC[player:getId()] = bonuses.specialMagic
 		for combatType, value in pairs(bonuses.specialMagic) do
 			if value ~= 0 then
 				player:addSpecialMagicLevel(combatType, value)
+				appliedSpecialMagic[combatType] = value
 			end
 		end
 	end
 
-	if bonuses.mitigation ~= 0 and player.addMitigation then
-		WHEEL_APPLIED_MITIGATION[player:getId()] = bonuses.mitigation
-		player:addMitigation(bonuses.mitigation)
+	if next(appliedSpecialMagic) then
+		WHEEL_APPLIED_SPECIAL_MAGIC[key] = appliedSpecialMagic
+	else
+		WHEEL_APPLIED_SPECIAL_MAGIC[key] = nil
 	end
+
+	if bonuses.mitigation ~= 0 and player.addMitigation then
+		WHEEL_APPLIED_MITIGATION[key] = bonuses.mitigation
+		player:addMitigation(bonuses.mitigation)
+	else
+		WHEEL_APPLIED_MITIGATION[key] = nil
+	end
+
+	local appliedStore = wheelAppliedKV(player)
+	appliedStore:set("conditionSubId", WHEEL_CONDITION_SUBID)
+	appliedStore:set("conditionApplied", hasConditionBonus)
+	appliedStore:set("specialMagic", appliedSpecialMagic)
+	appliedStore:set("mitigation", bonuses.mitigation or 0)
+	appliedStore:set("updatedAt", os.time())
 
 	player:reloadData()
 	return bonuses
@@ -750,8 +788,9 @@ wheelLoginEvent:register()
 local wheelLogoutEvent = CreatureEvent("WheelOfDestinyLogout")
 
 function wheelLogoutEvent.onLogout(player)
-	WHEEL_APPLIED_SPECIAL_MAGIC[player:getId()] = nil
-	WHEEL_APPLIED_MITIGATION[player:getId()] = nil
+	local key = getWheelPlayerKey(player)
+	WHEEL_APPLIED_SPECIAL_MAGIC[key] = nil
+	WHEEL_APPLIED_MITIGATION[key] = nil
 	return true
 end
 
