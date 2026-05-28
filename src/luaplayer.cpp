@@ -42,6 +42,23 @@ bool luaPlayerIsDisabledMonkVocation(const Player* player)
 	       luaPlayerIsMonkVocationId(player->getVocationId());
 }
 
+int32_t getWheelRevelationStage(const Player& player, const std::string& spellName)
+{
+	auto wheelKV = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", player.getGUID()))->scoped("wheel");
+	const auto stagesValue = wheelKV->get("revelationStages");
+	if (!stagesValue) {
+		return 0;
+	}
+
+	const auto stages = stagesValue->get<MapType>();
+	const auto it = stages.find(spellName);
+	if (it == stages.end() || !it->second) {
+		return 0;
+	}
+
+	return std::clamp(static_cast<int32_t>(it->second->getNumber()), 0, 3);
+}
+
 bool luaPlayerIsFamiliarSpell(std::string_view name)
 {
 	return name.find("Familiar") != std::string_view::npos || name.find("familiar") != std::string_view::npos;
@@ -3341,15 +3358,17 @@ int luaPlayerRevelationStageWOD(lua_State* L)
 		return 1;
 	}
 
-	if (lua_gettop(L) >= 2) {
-		if (lua_gettop(L) == 2) {
-			lua_pushnumber(L, 1);
-		} else {
-			pushBoolean(L, true);
-		}
-	} else {
+	if (lua_gettop(L) < 2) {
 		pushBoolean(L, true);
+		return 1;
 	}
+
+	if (lua_gettop(L) >= 3) {
+		pushBoolean(L, true);
+		return 1;
+	}
+
+	lua_pushinteger(L, getWheelRevelationStage(*player, getString(L, 2)));
 	return 1;
 }
 

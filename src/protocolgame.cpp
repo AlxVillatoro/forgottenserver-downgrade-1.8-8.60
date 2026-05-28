@@ -961,7 +961,10 @@ void ProtocolGame::parsePacket(NetworkMessage& msg)
 		case 0xE6:
 			parseBugReport(msg);
 			break;
-		case 0xE7: /* thank you */
+		case 0xE7: /* thank you / custom wheel gem action */
+			g_dispatcher.addTask([=, playerID = player->getID(), message = std::make_shared<NetworkMessage>(msg)]() {
+				g_game.parsePlayerNetworkMessage(playerID, recvbyte, std::make_unique<NetworkMessage>(*message));
+			});
 			break;
 		case 0xF2:
 			parseRuleViolationReport(msg);
