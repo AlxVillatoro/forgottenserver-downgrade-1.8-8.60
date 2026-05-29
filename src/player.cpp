@@ -2056,7 +2056,7 @@ void Player::onCreatureMove(Creature* creature, const Tile* newTile, const Posit
 	auto follow = followCreature.lock();
 	if (hasFollowPath && (creature == follow.get() || (creature == this && follow))) {
 		isUpdatingPath = false;
-		updateFollowPath();
+		g_dispatcher.addTask([id = getID()]() { g_game.updateCreatureWalk(id); });
 	}
 
 	if (creature != this) {

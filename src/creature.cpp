@@ -37,11 +37,6 @@ Creature::~Creature()
 {
 	liveCreatures.erase(this);
 
-	if (eventFollowPath != 0) {
-		g_scheduler.stopEvent(eventFollowPath);
-		eventFollowPath = 0;
-	}
-
 	attackedCreature.reset();
 	followCreature.reset();
 	removeMaster();
@@ -483,7 +478,7 @@ void Creature::onCreatureMove(Creature* creature, const Tile* newTile, const Pos
 	if (auto fc = followCreature.lock(); creature == fc.get() || (creature == this && fc)) {
 		if (hasFollowPath) {
 			isUpdatingPath = false;
-			updateFollowPath();
+			g_dispatcher.addTask(createTask([id = getID()] { g_game.updateCreatureWalk(id); }));
 		}
 
 		if (newPos.z != oldPos.z || !canSee(fc->getPosition())) {
@@ -972,34 +967,15 @@ void Creature::goToFollowCreature()
 	onFollowCreatureComplete(follow.get());
 }
 
-void Creature::updateFollowPath()
-{
-	if (eventFollowPath != 0 || followCreature.expired()) {
-		return;
-	}
-
-	eventFollowPath = g_scheduler.addEvent(createSchedulerTask(FOLLOW_EVENT_INTERVAL, [id = getID()]() {
-		g_game.updateCreatureWalk(id);
-	}));
-}
-
 bool Creature::setFollowCreature(Creature* creature)
 {
 	if (creature) {
 		if (auto follow = followCreature.lock(); follow.get() == creature) {
-			updateFollowPath();
 			return true;
 		}
 
 		const Position& creaturePos = creature->getPosition();
 		if (creaturePos.z != getPosition().z || !canSee(creaturePos)) {
-			if (eventFollowPath != 0) {
-				g_scheduler.stopEvent(eventFollowPath);
-				eventFollowPath = 0;
-			}
-
-			isUpdatingPath = false;
-			hasFollowPath = false;
 			followCreature.reset();
 			return false;
 		}
@@ -1018,16 +994,9 @@ bool Creature::setFollowCreature(Creature* creature)
 		}
 		followCreature = creatureRef;
 		isUpdatingPath = true;
-		updateFollowPath();
 	} else {
-		if (eventFollowPath != 0) {
-			g_scheduler.stopEvent(eventFollowPath);
-			eventFollowPath = 0;
-		}
-
 		isUpdatingPath = false;
 		followCreature.reset();
-		hasFollowPath = false;
 	}
 
 	onFollowCreature(creature);
