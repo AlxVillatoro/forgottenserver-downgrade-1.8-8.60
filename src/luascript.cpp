@@ -1114,6 +1114,11 @@ Position Lua::getPosition(lua_State* L, int32_t arg)
 Outfit_t Lua::getOutfit(lua_State* L, int32_t arg)
 {
 	Outfit_t outfit;
+	outfit.lookShader = getField<uint16_t>(L, arg, "lookShader");
+	outfit.lookEffect = getField<uint16_t>(L, arg, "lookEffect");
+	outfit.lookAura = getField<uint16_t>(L, arg, "lookAura");
+	outfit.lookWing = getField<uint16_t>(L, arg, "lookWing");
+	outfit.lookMount = getField<uint16_t>(L, arg, "lookMount");
 	outfit.lookAddons = getField<uint8_t>(L, arg, "lookAddons");
 
 	outfit.lookFeet = getField<uint8_t>(L, arg, "lookFeet");
@@ -1124,7 +1129,7 @@ Outfit_t Lua::getOutfit(lua_State* L, int32_t arg)
 	outfit.lookTypeEx = getField<uint16_t>(L, arg, "lookTypeEx");
 	outfit.lookType = getField<uint16_t>(L, arg, "lookType");
 
-	lua_pop(L, 8);
+	lua_pop(L, 13);
 	return outfit;
 }
 
@@ -1336,10 +1341,14 @@ void Lua::pushPosition(lua_State* L, const Position& position, int32_t stackpos 
 
 void Lua::pushOutfit(lua_State* L, const Outfit_t& outfit)
 {
-	lua_createtable(L, 0, 9);
+	lua_createtable(L, 0, 13);
 	setField(L, "lookType", outfit.lookType);
 	setField(L, "lookTypeEx", outfit.lookTypeEx);
 	setField(L, "lookMount", outfit.lookMount);
+	setField(L, "lookWing", outfit.lookWing);
+	setField(L, "lookAura", outfit.lookAura);
+	setField(L, "lookEffect", outfit.lookEffect);
+	setField(L, "lookShader", outfit.lookShader);
 	setField(L, "lookHead", outfit.lookHead);
 	setField(L, "lookBody", outfit.lookBody);
 	setField(L, "lookLegs", outfit.lookLegs);
@@ -2622,6 +2631,7 @@ void LuaScriptInterface::registerFunctions()
 
 	registerEnum(RELOAD_TYPE_ALL);
 	registerEnum(RELOAD_TYPE_ACTIONS);
+	registerEnum(RELOAD_TYPE_ATTACHED_EFFECTS);
 	registerEnum(RELOAD_TYPE_CHAT);
 	registerEnum(RELOAD_TYPE_CONFIG);
 	registerEnum(RELOAD_TYPE_CREATURESCRIPTS);

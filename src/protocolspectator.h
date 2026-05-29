@@ -17,6 +17,7 @@ class Tile;
 class Connection;
 class Quest;
 class ProtocolSpectator;
+class PlayerAttachedEffects;
 using ProtocolSpectator_ptr = std::shared_ptr<ProtocolSpectator>;
 extern Game g_game;
 
@@ -785,6 +786,48 @@ class ProtocolSpectator {
                 spy->sendMoveCreature(creature, newPos, newStackPos, oldPos, oldStackPos, teleport);
         }
 
+        void sendAttachedEffect(const Creature *creature, uint16_t effectId) {
+            auto o = owner.lock();
+            if (o)
+                o->sendAttachedEffect(creature, effectId);
+
+            for (auto &it : spectators)
+                it->sendAttachedEffect(creature, effectId);
+
+            for (auto &spy : spyClients_)
+                spy->sendAttachedEffect(creature, effectId);
+        }
+
+        void sendDetachEffect(const Creature *creature, uint16_t effectId) {
+            auto o = owner.lock();
+            if (o)
+                o->sendDetachEffect(creature, effectId);
+
+            for (auto &it : spectators)
+                it->sendDetachEffect(creature, effectId);
+
+            for (auto &spy : spyClients_)
+                spy->sendDetachEffect(creature, effectId);
+        }
+
+        void sendShader(const Creature *creature, std::string_view shaderName) {
+            auto o = owner.lock();
+            if (o)
+                o->sendShader(creature, shaderName);
+
+            for (auto &it : spectators)
+                it->sendShader(creature, shaderName);
+
+            for (auto &spy : spyClients_)
+                spy->sendShader(creature, shaderName);
+        }
+
+        void sendMapShader(std::string_view shaderName) {
+            auto o = owner.lock();
+            if (o)
+                o->sendMapShader(shaderName);
+        }
+
         //containers
         void sendAddContainerItem(uint8_t cid, const Item *item) {
             auto o = owner.lock();
@@ -942,6 +985,8 @@ class ProtocolSpectator {
 
         friend class ProtocolGame;
         friend class Player;
+        friend class Game;
+        friend class PlayerAttachedEffects;
         friend class SpySystem;
 
         std::weak_ptr<ProtocolGame> owner;

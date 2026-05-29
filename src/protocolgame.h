@@ -202,6 +202,10 @@ private:
 
 	void sendCreatureLight(const Creature* creature);
 	void sendWorldLight(LightInfo lightInfo);
+	void sendAttachedEffect(const Creature* creature, uint16_t effectId);
+	void sendDetachEffect(const Creature* creature, uint16_t effectId);
+	void sendShader(const Creature* creature, std::string_view shaderName);
+	void sendMapShader(std::string_view shaderName);
 
 	void sendCreatureSquare(const Creature* creature, SquareColor_t color);
 	void sendSpellCooldown(uint8_t spellId, uint32_t time);
@@ -253,6 +257,9 @@ private:
 	void AddCreature(NetworkMessage& msg, const Creature* creature, bool known, uint32_t remove);
 	void AddPlayerStats(NetworkMessage& msg);
 	void AddOutfit(NetworkMessage& msg, const Outfit_t& outfit);
+	void AddOutfitCustomOTC(NetworkMessage& msg, const Outfit_t& outfit);
+	void AddOutfitWindowCustomOTC(NetworkMessage& msg);
+	void sendCreatureAttachedEffects(const Creature* creature);
 	void AddPlayerSkills(NetworkMessage& msg);
 	void AddWorldLight(NetworkMessage& msg, LightInfo lightInfo);
 	void AddCreatureLight(NetworkMessage& msg, const Creature* creature);

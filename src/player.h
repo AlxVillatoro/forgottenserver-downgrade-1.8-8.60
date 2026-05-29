@@ -15,6 +15,7 @@
 #include "guild.h"
 #include "outfit.h"
 #include "party.h"
+#include "player_attached_effects.h"
 #include "protocolgame.h"
 #include "protocolspectator.h"
 #include "rewardchest.h"
@@ -153,6 +154,8 @@ public:
 	uint16_t getCurrentMount() const;
 	void setCurrentMount(uint16_t mountId);
 	bool isMounted() const { return defaultOutfit.lookMount != 0; }
+	bool isRandomMounted() const { return randomizeMount; }
+	void setRandomMounted(bool value) { randomizeMount = value; }
 	bool toggleMount(bool mount);
 	bool changeMount(uint16_t mountId, bool checkList = true);
 	bool tameMount(uint16_t mountId);
@@ -160,6 +163,9 @@ public:
 	bool hasMount(const Mount* mount) const;
 	bool hasMounts() const;
 	void dismount();
+
+	PlayerAttachedEffects& attachedEffects() { return attachedEffectsData; }
+	const PlayerAttachedEffects& attachedEffects() const { return attachedEffectsData; }
 
 	void sendFYIBox(std::string_view message)
 	{
@@ -1575,6 +1581,8 @@ private:
 	int64_t fearImmunityEnd = 0;
 	VirtueMonk_t m_virtue = VIRTUE_NONE;
 	bool loading = false;
+
+	PlayerAttachedEffects attachedEffectsData {*this};
 
 	AccountManagerMode accountManager{ACCOUNT_MANAGER_NONE};
 	std::array<bool, 15> managerTalkState{};

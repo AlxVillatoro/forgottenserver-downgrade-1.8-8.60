@@ -5,6 +5,7 @@
 #define FS_GAME_H
 
 #include "account.h"
+#include "attached_effects.h"
 #include "combat.h"
 #include "container.h"
 #include "groups.h"
@@ -500,6 +501,9 @@ public:
 	void addDistanceEffect(const Position& fromPos, const Position& toPos, uint16_t effect, uint32_t instanceId = 0);
 	static void addDistanceEffect(const SpectatorVec& spectators, const Position& fromPos, const Position& toPos,
 	                              uint16_t effect);
+	void sendAttachedEffect(const Creature* creature, uint16_t effectId);
+	void sendDetachEffect(const Creature* creature, uint16_t effectId);
+	void updateCreatureShader(const Creature* creature);
 
 	void registerInstanceArea(uint32_t instanceId, const Position& fromPos, const Position& toPos);
 	void unregisterInstanceArea(uint32_t instanceId);
@@ -568,6 +572,9 @@ public:
 	Map map;
 	Raids raids;
 	Mounts mounts;
+	AttachedEffects attachedEffects;
+	AttachedEffects& getAttachedEffects() { return attachedEffects; }
+	const AttachedEffects& getAttachedEffects() const { return attachedEffects; }
 
 	std::unordered_set<Position, PositionHasher> getTilesToClean() const { return tilesToClean; }
 	bool isTileInCleanList(Tile* tile)

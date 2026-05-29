@@ -6,6 +6,11 @@ local reloadTypes = {
 	["action"] = RELOAD_TYPE_ACTIONS,
 	["actions"] = RELOAD_TYPE_ACTIONS,
 
+	["attachedeffect"] = RELOAD_TYPE_ATTACHED_EFFECTS,
+	["attachedeffects"] = RELOAD_TYPE_ATTACHED_EFFECTS,
+	["attached_effect"] = RELOAD_TYPE_ATTACHED_EFFECTS,
+	["attached_effects"] = RELOAD_TYPE_ATTACHED_EFFECTS,
+
 	["chat"] = RELOAD_TYPE_CHAT,
 	["channel"] = RELOAD_TYPE_CHAT,
 	["chatchannels"] = RELOAD_TYPE_CHAT,

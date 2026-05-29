@@ -470,6 +470,7 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 		player->client->setOwner(getThis());
 	}
 	sendAddCreature(player.get(), player->getPosition(), 0);
+	player->attachedEffects().applyCurrent();
 	sendDllCheck();
 	player->lastIP = player->getIP();
 	player->lastLoginSaved = std::max<time_t>(time(nullptr), player->lastLoginSaved + 1);
@@ -1306,6 +1307,18 @@ void ProtocolGame::parseSetOutfit(NetworkMessage& msg)
 	} else {
 		newOutfit.lookMount = 0;
 	}
+
+	if (isOTC && msg.getRemainingBufferLength() >= 8) {
+		newOutfit.lookWing = msg.get<uint16_t>();
+		newOutfit.lookAura = msg.get<uint16_t>();
+		newOutfit.lookEffect = msg.get<uint16_t>();
+		const std::string shaderName = msg.getString();
+		if (!shaderName.empty()) {
+			const auto shader = g_game.getAttachedEffects().getShaderByName(shaderName);
+			newOutfit.lookShader = shader ? shader->id : 0;
+		}
+	}
+
 	g_dispatcher.addTask([=, playerID = player->getID()]() { g_game.playerChangeOutfit(playerID, newOutfit); });
 }
 
@@ -2557,6 +2570,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 			auto [known, removedKnown] = isKnownCreature(creature->getID());
 			AddCreature(msg, creature, known, removedKnown);
 			writeToOutputBuffer(msg);
+			sendCreatureAttachedEffects(creature);
 		}
 
 		if (magicEffect != CONST_ME_NONE) {
@@ -2609,6 +2623,7 @@ void ProtocolGame::sendAddCreature(const Creature* creature, const Position& pos
 	}
 
 	player->sendIcons();
+	sendCreatureAttachedEffects(creature);
 }
 
 void ProtocolGame::sendMoveCreature(const Creature* creature, const Position& newPos, int32_t newStackPos,
@@ -2968,6 +2983,8 @@ void ProtocolGame::sendOutfitWindow()
 		}
 	}
 
+	AddOutfitWindowCustomOTC(msg);
+
 	writeToOutputBuffer(msg);
 }
 
@@ -3229,6 +3246,128 @@ void ProtocolGame::AddOutfit(NetworkMessage& msg, const Outfit_t& outfit)
 	if (isOTC || getVersion() != 861) {
 		msg.add<uint16_t>(outfit.lookMount);
 	}
+
+	AddOutfitCustomOTC(msg, outfit);
+}
+
+void ProtocolGame::AddOutfitCustomOTC(NetworkMessage& msg, const Outfit_t& outfit)
+{
+	if (!isOTC) {
+		return;
+	}
+
+	msg.add<uint16_t>(outfit.lookWing);
+	msg.add<uint16_t>(outfit.lookAura);
+	msg.add<uint16_t>(outfit.lookEffect);
+
+	std::string shaderName;
+	if (outfit.lookShader != 0) {
+		const auto shader = g_game.getAttachedEffects().getShaderByID(outfit.lookShader);
+		if (shader) {
+			shaderName = shader->name;
+		}
+	}
+	msg.addString(shaderName);
+}
+
+void ProtocolGame::AddOutfitWindowCustomOTC(NetworkMessage& msg)
+{
+	if (!isOTC) {
+		return;
+	}
+
+	auto addList = [&msg](const auto& values, const auto& hasValue) {
+		std::vector<typename std::decay_t<decltype(values)>::value_type> available;
+		available.reserve(values.size());
+		for (const auto& value : values) {
+			if (hasValue(value)) {
+				available.push_back(value);
+			}
+		}
+
+		msg.addByte(static_cast<uint8_t>(std::min<size_t>(available.size(), std::numeric_limits<uint8_t>::max())));
+		size_t count = 0;
+		for (const auto& value : available) {
+			if (count++ >= std::numeric_limits<uint8_t>::max()) {
+				break;
+			}
+			msg.add<uint16_t>(value->id);
+			msg.addString(value->name);
+		}
+	};
+
+	const auto& effects = g_game.getAttachedEffects();
+	auto& playerEffects = player->attachedEffects();
+	addList(effects.getWings(), [&playerEffects](const std::shared_ptr<Wing>& wing) { return playerEffects.hasWing(wing); });
+	addList(effects.getAuras(), [&playerEffects](const std::shared_ptr<Aura>& aura) { return playerEffects.hasAura(aura); });
+	addList(effects.getEffects(), [&playerEffects](const std::shared_ptr<Effect>& effect) { return playerEffects.hasEffect(effect); });
+	addList(effects.getShaders(), [&playerEffects](const std::shared_ptr<Shader>& shader) { return playerEffects.hasShader(shader.get()); });
+}
+
+void ProtocolGame::sendAttachedEffect(const Creature* creature, uint16_t effectId)
+{
+	if (!isOTC || !creature || !canSee(creature)) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x34);
+	msg.add<uint32_t>(creature->getID());
+	msg.add<uint16_t>(effectId);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendDetachEffect(const Creature* creature, uint16_t effectId)
+{
+	if (!isOTC || !creature || !canSee(creature)) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x35);
+	msg.add<uint32_t>(creature->getID());
+	msg.add<uint16_t>(effectId);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendShader(const Creature* creature, std::string_view shaderName)
+{
+	if (!isOTC || !creature || !canSee(creature)) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x36);
+	msg.add<uint32_t>(creature->getID());
+	msg.addString(shaderName);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendMapShader(std::string_view shaderName)
+{
+	if (!isOTC) {
+		return;
+	}
+
+	NetworkMessage msg;
+	msg.addByte(0x37);
+	msg.addString(shaderName);
+	writeToOutputBuffer(msg);
+}
+
+void ProtocolGame::sendCreatureAttachedEffects(const Creature* creature)
+{
+	if (!isOTC || !creature || !canSee(creature)) {
+		return;
+	}
+
+	for (uint16_t effectId : creature->getAttachedEffectList()) {
+		sendAttachedEffect(creature, effectId);
+	}
+
+	if (!creature->getShader().empty()) {
+		sendShader(creature, creature->getShader());
+	}
 }
 
 void ProtocolGame::AddWorldLight(NetworkMessage& msg, LightInfo lightInfo)
@@ -3435,6 +3574,8 @@ void ProtocolGame::sendFeatures()
 	features[GameFeature::AdditionalSkills] = true;
 	features[GameFeature::ExtendedClientPing] = true;
 	features[GameFeature::CreatureIcons] = true;
+	features[GameFeature::WingsAndAura] = true;
+	features[GameFeature::OutfitShaders] = true;
 	if (useItemTierByte) {
 		features[GameFeature::ItemTierByte] = true;
 	}

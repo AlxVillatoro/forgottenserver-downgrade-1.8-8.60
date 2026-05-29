@@ -1743,3 +1743,24 @@ std::optional<int64_t> Creature::getStorageValue(uint32_t key) const
 	}
 	return std::make_optional(it->second);
 }
+
+void Creature::attachEffectById(uint16_t id)
+{
+	if (std::ranges::find(attachedEffectList, id) != attachedEffectList.end()) {
+		return;
+	}
+
+	attachedEffectList.emplace_back(id);
+	g_game.sendAttachedEffect(this, id);
+}
+
+void Creature::detachEffectById(uint16_t id)
+{
+	const auto it = std::ranges::find(attachedEffectList, id);
+	if (it == attachedEffectList.end()) {
+		return;
+	}
+
+	attachedEffectList.erase(it);
+	g_game.sendDetachEffect(this, id);
+}

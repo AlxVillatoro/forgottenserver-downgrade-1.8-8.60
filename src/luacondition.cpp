@@ -190,6 +190,10 @@ int luaConditionSetOutfit(lua_State* L)
 	if (isTable(L, 2)) {
 		outfit = getOutfit(L, 2);
 	} else {
+		outfit.lookShader = getInteger<uint16_t>(L, 12, outfit.lookShader);
+		outfit.lookEffect = getInteger<uint16_t>(L, 11, outfit.lookEffect);
+		outfit.lookAura = getInteger<uint16_t>(L, 10, outfit.lookAura);
+		outfit.lookWing = getInteger<uint16_t>(L, 9, outfit.lookWing);
 		outfit.lookAddons = getInteger<uint8_t>(L, 8, outfit.lookAddons);
 		outfit.lookFeet = getInteger<uint8_t>(L, 7);
 		outfit.lookLegs = getInteger<uint8_t>(L, 6);

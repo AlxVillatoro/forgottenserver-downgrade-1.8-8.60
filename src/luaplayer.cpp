@@ -1953,6 +1953,72 @@ int luaPlayerSendOutfitWindow(lua_State* L)
 	return 1;
 }
 
+int luaPlayerAddCustomOutfit(lua_State* L)
+{
+	// player:addCustomOutfit(type, idOrName)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	std::variant<uint16_t, std::string> idOrName;
+	if (isInteger(L, 3)) {
+		idOrName = getInteger<uint16_t>(L, 3);
+	} else {
+		idOrName = getString(L, 3);
+	}
+	pushBoolean(L, player->attachedEffects().addCustomOutfit(getString(L, 2), idOrName));
+	return 1;
+}
+
+int luaPlayerRemoveCustomOutfit(lua_State* L)
+{
+	// player:removeCustomOutfit(type, idOrName)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	std::variant<uint16_t, std::string> idOrName;
+	if (isInteger(L, 3)) {
+		idOrName = getInteger<uint16_t>(L, 3);
+	} else {
+		idOrName = getString(L, 3);
+	}
+	pushBoolean(L, player->attachedEffects().removeCustomOutfit(getString(L, 2), idOrName));
+	return 1;
+}
+
+int luaPlayerGetMapShader(lua_State* L)
+{
+	// player:getMapShader()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		pushString(L, player->attachedEffects().getMapShader());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetMapShader(lua_State* L)
+{
+	// player:setMapShader(shaderName)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	const std::string shaderName = getString(L, 2);
+	player->attachedEffects().setMapShader(shaderName);
+	player->attachedEffects().sendMapShader(shaderName);
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerAddMount(lua_State* L)
 {
 	// player:addMount(mountId or mountName)
@@ -4009,6 +4075,10 @@ void LuaScriptInterface::registerPlayer()
 	registerMethod("Player", "hasOutfit", luaPlayerHasOutfit);
 	registerMethod("Player", "canWearOutfit", luaPlayerCanWearOutfit);
 	registerMethod("Player", "sendOutfitWindow", luaPlayerSendOutfitWindow);
+	registerMethod("Player", "addCustomOutfit", luaPlayerAddCustomOutfit);
+	registerMethod("Player", "removeCustomOutfit", luaPlayerRemoveCustomOutfit);
+	registerMethod("Player", "getMapShader", luaPlayerGetMapShader);
+	registerMethod("Player", "setMapShader", luaPlayerSetMapShader);
 
 	registerMethod("Player", "addMount", luaPlayerAddMount);
 	registerMethod("Player", "removeMount", luaPlayerRemoveMount);

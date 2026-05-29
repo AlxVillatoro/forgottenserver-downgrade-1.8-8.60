@@ -406,6 +406,12 @@ public:
 
 	const auto& getDamageMap() const { return damageMap; }
 
+	void attachEffectById(uint16_t id);
+	void detachEffectById(uint16_t id);
+	const std::vector<uint16_t>& getAttachedEffectList() const { return attachedEffectList; }
+	const std::string& getShader() const { return shader; }
+	void setShader(std::string_view shaderName) { shader = shaderName; }
+
 protected:
 	struct CountBlock_t
 	{
@@ -446,6 +452,8 @@ protected:
 	Outfit_t currentOutfit;
 	Outfit_t defaultOutfit;
 	uint16_t currentMount;
+	std::vector<uint16_t> attachedEffectList;
+	std::string shader;
 
 	Position lastPosition;
 	LightInfo internalLight;

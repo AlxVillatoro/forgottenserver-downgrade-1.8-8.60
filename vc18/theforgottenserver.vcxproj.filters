@@ -3,6 +3,7 @@
   <ItemGroup>
     <ClCompile Include="..\src\actions.cpp" />
     <ClCompile Include="..\src\admin.cpp" />
+    <ClCompile Include="..\src\attached_effects.cpp" />
     <ClCompile Include="..\src\ban.cpp" />
     <ClCompile Include="..\src\baseevents.cpp" />
     <ClCompile Include="..\src\bed.cpp" />
@@ -50,6 +51,7 @@
     <ClCompile Include="..\src\outputmessage.cpp" />
     <ClCompile Include="..\src\party.cpp" />
     <ClCompile Include="..\src\player.cpp" />
+    <ClCompile Include="..\src\player_attached_effects.cpp" />
     <ClCompile Include="..\src\position.cpp" />
     <ClCompile Include="..\src\protocol.cpp" />
     <ClCompile Include="..\src\protocolgame.cpp" />
@@ -207,6 +209,7 @@
     <ClInclude Include="..\src\account.h" />
     <ClInclude Include="..\src\actions.h" />
     <ClInclude Include="..\src\admin.h" />
+    <ClInclude Include="..\src\attached_effects.h" />
     <ClInclude Include="..\src\ban.h" />
     <ClInclude Include="..\src\baseevents.h" />
     <ClInclude Include="..\src\bed.h" />
@@ -261,6 +264,7 @@
     <ClInclude Include="..\src\outputmessage.h" />
     <ClInclude Include="..\src\party.h" />
     <ClInclude Include="..\src\player.h" />
+    <ClInclude Include="..\src\player_attached_effects.h" />
     <ClInclude Include="..\src\position.h" />
     <ClInclude Include="..\src\protocol.h" />
     <ClInclude Include="..\src\protocolgame.h" />

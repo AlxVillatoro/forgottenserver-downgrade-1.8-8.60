@@ -804,6 +804,84 @@ int luaCreatureSetOutfit(lua_State* L)
 	return 1;
 }
 
+int luaCreatureAttachEffectById(lua_State* L)
+{
+	// creature:attachEffectById(effectId[, temporary = false])
+	Creature* creature = getUserdata<Creature>(L, 1);
+	if (!creature) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	uint16_t effectId = getInteger<uint16_t>(L, 2);
+	if (getBoolean(L, 3, false)) {
+		g_game.sendAttachedEffect(creature, effectId);
+	} else {
+		creature->attachEffectById(effectId);
+	}
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaCreatureDetachEffectById(lua_State* L)
+{
+	// creature:detachEffectById(effectId)
+	Creature* creature = getUserdata<Creature>(L, 1);
+	if (!creature) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	creature->detachEffectById(getInteger<uint16_t>(L, 2));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaCreatureGetAttachedEffects(lua_State* L)
+{
+	// creature:getAttachedEffects()
+	const Creature* creature = getUserdata<const Creature>(L, 1);
+	if (!creature) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_createtable(L, static_cast<int>(creature->getAttachedEffectList().size()), 0);
+	int index = 0;
+	for (uint16_t effectId : creature->getAttachedEffectList()) {
+		lua_pushinteger(L, effectId);
+		lua_rawseti(L, -2, ++index);
+	}
+	return 1;
+}
+
+int luaCreatureGetShader(lua_State* L)
+{
+	// creature:getShader()
+	const Creature* creature = getUserdata<const Creature>(L, 1);
+	if (creature) {
+		pushString(L, creature->getShader());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaCreatureSetShader(lua_State* L)
+{
+	// creature:setShader(shaderName)
+	Creature* creature = getUserdata<Creature>(L, 1);
+	if (!creature) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	creature->setShader(getString(L, 2));
+	g_game.updateCreatureShader(creature);
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaCreatureGetCondition(lua_State* L)
 {
 	// creature:getCondition(conditionType[, conditionId = CONDITIONID_COMBAT[, subId = 0]])
@@ -1399,6 +1477,11 @@ void LuaScriptInterface::registerCreature()
 
 	registerMethod("Creature", "getOutfit", luaCreatureGetOutfit);
 	registerMethod("Creature", "setOutfit", luaCreatureSetOutfit);
+	registerMethod("Creature", "attachEffectById", luaCreatureAttachEffectById);
+	registerMethod("Creature", "detachEffectById", luaCreatureDetachEffectById);
+	registerMethod("Creature", "getAttachedEffects", luaCreatureGetAttachedEffects);
+	registerMethod("Creature", "getShader", luaCreatureGetShader);
+	registerMethod("Creature", "setShader", luaCreatureSetShader);
 
 	registerMethod("Creature", "getCondition", luaCreatureGetCondition);
 	registerMethod("Creature", "addCondition", luaCreatureAddCondition);

@@ -234,6 +234,7 @@ void Game::setGameState(GameState_t newState)
 			map.spawns.startup();
 
 			mounts.loadFromXml();
+			attachedEffects.loadFromXml();
 
 			raids.loadFromXml();
 			raids.startup();
@@ -4150,19 +4151,79 @@ void Game::playerChangeOutfit(uint32_t playerId, Outfit_t outfit, bool randomize
 		player->wasMounted = false;
 	}
 
-	if (player->canWear(outfit.lookType, outfit.lookAddons)) {
-		player->changeOutfit(outfit, false);
+	if (!player->canWear(outfit.lookType, outfit.lookAddons)) {
+		return;
+	}
 
-		if (player->hasCondition(CONDITION_OUTFIT)) {
+	player->changeOutfit(outfit, false);
+
+	if (player->hasCondition(CONDITION_OUTFIT)) {
+		return;
+	}
+
+	if (player->randomizeMount && player->hasMounts()) {
+		const Mount* mount = mounts.getMountByID(player->getRandomMount());
+		outfit.lookMount = mount->clientId;
+	}
+
+	internalCreatureChangeOutfit(player, outfit);
+
+	auto& playerAttachedEffects = player->attachedEffects();
+	if (outfit.lookWing != 0) {
+		const auto wing = attachedEffects.getWingByID(outfit.lookWing);
+		if (!wing || !playerAttachedEffects.hasWing(wing)) {
 			return;
 		}
+		player->detachEffectById(playerAttachedEffects.getCurrentWing());
+		playerAttachedEffects.setCurrentWing(wing->id);
+		player->attachEffectById(wing->id);
+	} else {
+		player->detachEffectById(playerAttachedEffects.getCurrentWing());
+		playerAttachedEffects.setCurrentWing(0);
+		playerAttachedEffects.setWasWinged(false);
+	}
 
-		if (player->randomizeMount && player->hasMounts()) {
-			const Mount* mount = mounts.getMountByID(player->getRandomMount());
-			outfit.lookMount = mount->clientId;
+	if (outfit.lookEffect != 0) {
+		const auto effect = attachedEffects.getEffectByID(outfit.lookEffect);
+		if (!effect || !playerAttachedEffects.hasEffect(effect)) {
+			return;
 		}
+		player->detachEffectById(playerAttachedEffects.getCurrentEffect());
+		playerAttachedEffects.setCurrentEffect(effect->id);
+		player->attachEffectById(effect->id);
+	} else {
+		player->detachEffectById(playerAttachedEffects.getCurrentEffect());
+		playerAttachedEffects.setCurrentEffect(0);
+		playerAttachedEffects.setWasEffected(false);
+	}
 
-		internalCreatureChangeOutfit(player, outfit);
+	if (outfit.lookAura != 0) {
+		const auto aura = attachedEffects.getAuraByID(outfit.lookAura);
+		if (!aura || !playerAttachedEffects.hasAura(aura)) {
+			return;
+		}
+		player->detachEffectById(playerAttachedEffects.getCurrentAura());
+		playerAttachedEffects.setCurrentAura(aura->id);
+		player->attachEffectById(aura->id);
+	} else {
+		player->detachEffectById(playerAttachedEffects.getCurrentAura());
+		playerAttachedEffects.setCurrentAura(0);
+		playerAttachedEffects.setWasAuraed(false);
+	}
+
+	if (outfit.lookShader != 0) {
+		const auto shader = attachedEffects.getShaderByID(outfit.lookShader);
+		if (!shader || !playerAttachedEffects.hasShader(shader.get())) {
+			return;
+		}
+		playerAttachedEffects.setCurrentShader(shader->id);
+		player->setShader(shader->name);
+		playerAttachedEffects.sendShader(player, shader->name);
+	} else {
+		player->setShader("Outfit - Default");
+		playerAttachedEffects.sendShader(player, "Outfit - Default");
+		playerAttachedEffects.setCurrentShader(0);
+		playerAttachedEffects.setWasShadered(false);
 	}
 
 	if (player->isMounted()) {
@@ -5888,6 +5949,54 @@ void Game::addDistanceEffect(const SpectatorVec& spectators, const Position& fro
 	}
 }
 
+void Game::sendAttachedEffect(const Creature* creature, uint16_t effectId)
+{
+	if (!creature) {
+		return;
+	}
+
+	SpectatorVec spectators;
+	map.getSpectators(spectators, creature->getPosition(), true, true);
+	for (const auto& spectator : spectators) {
+		Player* player = spectator ? spectator->getPlayer() : nullptr;
+		if (player) {
+			player->client->sendAttachedEffect(creature, effectId);
+		}
+	}
+}
+
+void Game::sendDetachEffect(const Creature* creature, uint16_t effectId)
+{
+	if (!creature) {
+		return;
+	}
+
+	SpectatorVec spectators;
+	map.getSpectators(spectators, creature->getPosition(), true, true);
+	for (const auto& spectator : spectators) {
+		Player* player = spectator ? spectator->getPlayer() : nullptr;
+		if (player) {
+			player->client->sendDetachEffect(creature, effectId);
+		}
+	}
+}
+
+void Game::updateCreatureShader(const Creature* creature)
+{
+	if (!creature) {
+		return;
+	}
+
+	SpectatorVec spectators;
+	map.getSpectators(spectators, creature->getPosition(), true, true);
+	for (const auto& spectator : spectators) {
+		Player* player = spectator ? spectator->getPlayer() : nullptr;
+		if (player) {
+			player->client->sendShader(creature, creature->getShader());
+		}
+	}
+}
+
 void Game::setAccountStorageValue(const uint32_t accountId, const uint32_t key, const int32_t value)
 {
 	if (value == -1) {
@@ -7155,6 +7264,11 @@ bool Game::reload(ReloadTypes_t reloadType)
 			LOG_INFO("Actions reloaded successfully.");
 			return true;
 		}
+		case RELOAD_TYPE_ATTACHED_EFFECTS: {
+			bool result = attachedEffects.reload();
+			if (result) LOG_INFO("Attached effects reloaded successfully.");
+			return result;
+		}
 		case RELOAD_TYPE_CHAT: {
 			bool result = g_chat->load();
 			if (result) LOG_INFO("Chat reloaded successfully.");
@@ -7294,6 +7408,7 @@ bool Game::reload(ReloadTypes_t reloadType)
 			g_weapons->reload();
 			g_weapons->loadDefaults();
 			mounts.reload();
+			attachedEffects.reload();
 			g_globalEvents->reload();
 			g_events->load();
 			g_chat->load();
