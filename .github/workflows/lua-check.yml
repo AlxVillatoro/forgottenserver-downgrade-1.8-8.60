@@ -11,48 +11,62 @@ on:
       - "data/**/*.lua"
 
   pull_request:
+    branches:
+      - main
+      - "v*"
     paths:
       - ".github/workflows/lua-check.yml"
       - "config.lua.dist"
       - "data/**/*.lua"
 
+  workflow_dispatch:
+
 concurrency:
-  group: lua-check-${{ github.ref }}
+  group: lua-check-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   luac:
     name: Lua syntax check
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: leafo/gh-actions-lua@v10
-        with:
-          luaVersion: "5.4"
+      - name: Install Lua
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4
 
       - name: Test Lua syntax
         run: |
-          luac -p config.lua.dist
-          find data/ -type f -name '*.lua' -print0 | xargs -0 -n1 luac -p
+          luac5.4 -p config.lua.dist
+          find data/ -type f -name '*.lua' -print0 | xargs -0 -r -n1 luac5.4 -p
 
   lint:
     name: Lua lint
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [luac]
     continue-on-error: true
 
+    permissions:
+      contents: read
+
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: leafo/gh-actions-lua@v10
-        with:
-          luaVersion: "5.4"
-
-      - uses: leafo/gh-actions-luarocks@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Install Luacheck
-        run: luarocks install luacheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 luarocks
+          sudo luarocks install luacheck
 
       - name: Run Luacheck
         run: luacheck data config.lua.dist
@@ -60,21 +74,25 @@ jobs:
   format:
     name: Lua format check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [luac]
     continue-on-error: true
 
+    permissions:
+      contents: read
+
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: leafo/gh-actions-lua@v10
-        with:
-          luaVersion: "5.4"
-
-      - uses: leafo/gh-actions-luarocks@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Install LuaFormatter
-        run: luarocks install --server=https://luarocks.org/dev luaformatter
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lua5.4 luarocks cmake g++
+          sudo luarocks install --server=https://luarocks.org/dev luaformatter
 
       - name: Check Lua formatting
         run: |
-          find data/ -type f -name '*.lua' -print0 | xargs -0 -n1 luaformatter -i
+          find data/ -type f -name '*.lua' -print0 | xargs -0 -r -n1 luaformatter -i
+          git diff
           git diff --exit-code
