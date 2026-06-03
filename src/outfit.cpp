@@ -13,6 +13,19 @@
 #include "logger.h"
 #include <fmt/format.h>
 
+bool Outfits::reload()
+{
+	std::unordered_map<uint16_t, Outfit> tempOutfits;
+	std::swap(outfits, tempOutfits);
+	
+	if (loadFromXml()) {
+		return true;
+	}
+
+	std::swap(outfits, tempOutfits);
+	return false;
+}
+
 bool Outfits::loadFromXml()
 {
 	pugi::xml_document doc;
