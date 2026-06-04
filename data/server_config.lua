@@ -8,7 +8,7 @@ maxProtocolOutfits = 255
 maxAddonAttributes = 3
 dllCheckKick = true
 dllCheckKickTime = 5
-astraClientOnly = true
+astraClientOnly = false
 
 -- Dual Wielding
 -- NOTE: dualWieldingSpeedRate = 200 means dual-wielding attacks twice as fast
