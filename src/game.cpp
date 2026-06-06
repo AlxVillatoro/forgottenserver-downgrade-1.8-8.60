@@ -28,6 +28,7 @@
 #include "spells.h"
 #include "spy.h"
 #include "storeinbox.h"
+#include "lua_gc_monitor.h"
 #include "talkaction.h"
 #include "scriptmanager.h"
 #include "tools.h"
@@ -345,6 +346,19 @@ void Game::start(const std::shared_ptr<ServiceManager>& manager)
 	}
 	g_scheduler.addEvent(createSchedulerTask(EVENT_CREATURE_THINK_INTERVAL, [this]() { checkCreatures(0); }));
 	g_scheduler.addEvent(createSchedulerTask(1000, [this]() { checkSereneStatus(); }));
+
+	if (ConfigManager::getBoolean(ConfigManager::LUA_GC_STEP_ENABLED)) {
+		auto gcStepTask = [this]() {
+			if (g_luaEnvironment.getLuaState()) {
+				LuaGcMonitor::step(g_luaEnvironment.getLuaState());
+				LuaGcMonitor::logIfNeeded(g_luaEnvironment.getLuaState());
+			}
+			g_scheduler.addEvent(createSchedulerTask(
+			    ConfigManager::getInteger(ConfigManager::LUA_GC_STEP_INTERVAL), gcStepTask));
+		};
+		g_scheduler.addEvent(createSchedulerTask(
+		    ConfigManager::getInteger(ConfigManager::LUA_GC_STEP_INTERVAL), gcStepTask));
+	}
 }
 
 GameState_t Game::getGameState() const { return gameState.load(std::memory_order_acquire); }

@@ -22,6 +22,7 @@
 #include "server.h"
 #include "signals.h"
 #include "luascript.h"
+#include "lua_gc_monitor.h"
 #include "thread_pool.h"
 #include "zones.h"
 
@@ -357,6 +358,10 @@ void mainLoader(const std::shared_ptr<ServiceManager>& services)
 	g_game.map.houses.payHouses(rentPeriod);
 
 	LOG_INFO(">> Loaded all modules, server starting up...");
+
+	if (ConfigManager::getBoolean(ConfigManager::LUA_GC_FULL_COLLECT_ON_STARTUP) && g_luaEnvironment.getLuaState()) {
+		LuaGcMonitor::fullCollect(g_luaEnvironment.getLuaState(), "startup");
+	}
 
 #ifndef _WIN32
 	if (getuid() == 0 || geteuid() == 0) {
