@@ -202,6 +202,9 @@
     <ClCompile Include="..\src\luaxml.cpp">
       <Filter>Lua Modules</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\lua_gc_monitor.cpp">
+      <Filter>Lua Modules</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\account.h" />
@@ -296,6 +299,7 @@
     <ClInclude Include="..\src\decay.h" />
     <ClInclude Include="..\src\rewardchest.h" />
     <ClInclude Include="..\src\logger.h" />
+    <ClInclude Include="..\src\lua_gc_monitor.h" />
     <ClInclude Include="..\src\inbox.h" />
     <ClInclude Include="..\src\mapcache.h" />
     <ClInclude Include="..\src\stats.h" />
