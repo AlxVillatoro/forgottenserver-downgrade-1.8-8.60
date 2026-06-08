@@ -58,39 +58,39 @@
 -- ============================================================================
 local STRESS_TABLE = "stress_pr69"
 local STORAGE_BASE = 95000   -- mude se colidir com storage keys do seu server
-local REPORT_DELAY = 1200    -- ms aguardados antes de verificar flushes assíncronos
+local REPORT_DELAY = 15000   -- AUMENTADO PARA 15 SEGUNDOS (Obrigatório para dar tempo de esvaziar a fila gigante)
 
 local CFG = {
-    -- Phase 1
-    ph1_inserts        = 300,
-    ph1_tx_batch       = 100,   -- INSERTs dentro da sub-transação explícita
+    -- Phase 1: Flood massivo de conexões soltas vs Transação única
+    ph1_inserts        = 5000,  -- 5 mil INSERTs individuais abrindo/fechando transações (Auto-commit espancado)
+    ph1_tx_batch       = 2000,  -- 2 mil INSERTs dentro de um único bloco de transação explícita
 
-    -- Phase 2
-    ph2_storage_keys   = 60,    -- N keys; metade (pares) será removida
+    -- Phase 2: Query gigante com cláusula IN (...)
+    ph2_storage_keys   = 1000,  -- 1.000 chaves buscadas de uma vez, testando o parser de query do MySQL
 
-    -- Phase 3
-    ph3_save_count     = 12,
-    ph3_stagger_ms     = 15,
+    -- Phase 3: Metralhadora de I/O na Main Thread (Risco real de congelar a tela do jogo)
+    ph3_save_count     = 300,   -- 300 salvamentos forçados do player consecutivamente
+    ph3_stagger_ms     = 0,     -- 0ms ou 1ms: sem intervalo! Vai enfileirar tudo no mesmo frame de execução
 
-    -- Phase 4
-    ph4_sentinel_rows  = 4,
-    ph4_update_bursts  = 30,
+    -- Phase 4: Caos de Travas (Guerra de Deadlocks no InnoDB)
+    ph4_sentinel_rows  = 30,    -- 30 registros sob disputa intensa
+    ph4_update_bursts  = 600,   -- 600 atualizações cruzadas simultâneas tentando travar uma à outra
 
-    -- Phase 5
-    ph5_event_bursts   = 50,    -- goroutinas addEvent(0) disparadas
+    -- Phase 5: Saturação Máxima do Pool de Workers Assíncronos
+    ph5_event_bursts   = 1500,  -- 1.500 tarefas assíncronas paralelas jogadas na fila de uma vez só
 
-    -- Phase 7
-    ph7_commit_rows    = 80,    -- linhas no path COMMIT
-    ph7_rollback_rows  = 25,    -- linhas no path ROLLBACK (devem sumir)
+    -- Phase 7: Teste de Estresse do Log de Redo/Undo (Rollback pesado)
+    ph7_commit_rows    = 1500,  -- 1.500 linhas confirmadas
+    ph7_rollback_rows  = 800,   -- 800 linhas escritas e depois desfeitas (testa severamente os buffers de Undo)
 
-    -- Phase 8
-    ph8_rows           = 60,    -- linhas v1; serão deletadas e re-inseridas como v2
+    -- Phase 8: Fragmentação de Tabelas
+    ph8_rows           = 1000,  -- Deleta e reinsere 1.000 registros simulando save real de storages
 
-    -- Phase 9
-    ph9_batch_size     = 150,   -- linhas num único multi-row INSERT
+    -- Phase 9: Teste de Limite de Pacote de Rede do MySQL
+    ph9_batch_size     = 3500,  -- Uma única query string MONSTRUOSA contendo 3.500 linhas de dados
 
-    -- Phase 11
-    ph11_upsert_rows   = 50,    -- linhas para o ON DUPLICATE KEY UPDATE
+    -- Phase 11: Upserts Simultâneos (Duas operações por linha)
+    ph11_upsert_rows   = 1000,  -- 1.000 inserções com tratamento de colisão de chave primária
 }
 
 -- Constantes de mensagem podem mudar entre forks.
@@ -139,7 +139,7 @@ local function logPass(player, msg)
 end
 
 local function logInfo(player, msg)
-    local coloredMsg = msg:gsub("(Phase %d+)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
+    local coloredMsg = msg:gsub("(Phase %d+[abc]?%-?[abc]?:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
     coloredMsg = coloredMsg:gsub("(Ph%d+ [A-Z]+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
     coloredMsg = coloredMsg:gsub("(Ph%d+:)", COLOR_ORANGE .. "%1" .. COLOR_RESET)
     print(COLOR_BLUE .. "[StressDB]" .. COLOR_GREEN .. "[INFO]" .. COLOR_RESET .. " " .. coloredMsg)
@@ -359,7 +359,7 @@ end
 --]]
 local function runPhase2(player, runId)
     local n    = CFG.ph2_storage_keys
-    local base = STORAGE_BASE + 2000
+    local base = STORAGE_BASE + 3000
 
     log(player, string.format("Phase 2: Storage dirty snapshot - %d keys (verificacao com IN + next())...", n))
 
