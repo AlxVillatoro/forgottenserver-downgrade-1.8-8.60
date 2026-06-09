@@ -1,0 +1,136 @@
+name: Build with vcpkg
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+      - 'fix/**'
+      - 'feat/**'
+
+    paths:
+      - .github/workflows/build-vcpkg.yml
+      - cmake/**
+      - src/**
+      - CMakeLists.txt
+      - CMakePresets.json
+      - vcpkg.json
+
+  pull_request:
+    paths:
+      - .github/workflows/build-vcpkg.yml
+      - cmake/**
+      - src/**
+      - CMakeLists.txt
+      - CMakePresets.json
+      - vcpkg.json
+
+jobs:
+  build-linux:
+    name: Linux
+    runs-on: ubuntu-24.04
+
+    env:
+      CXX: g++-14
+      VCPKG_BUILD_TYPE: release
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/x64-linux
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg_cache
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Create vcpkg binary cache directory
+        run: mkdir -p "${{ github.workspace }}/vcpkg_cache"
+        shell: bash
+
+      - name: Get latest CMake
+        uses: lukka/get-cmake@7bfc9baacbbdcb5e37957ad05c3546b3e222be3c # v4.3.2
+
+      - name: Cache vcpkg binary packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-linux-${{ hashFiles('vcpkg.json', 'CMakeLists.txt', '**/CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            vcpkg-linux-
+      - name: Run vcpkg
+        uses: lukka/run-vcpkg@5b984d559fb3e9b2c166e2bb83b9cdd1418ff930 # v11
+
+      - name: Build with CMake
+        uses: lukka/run-cmake@5d55ea7949e25f69f0ecb516d8d572297e03a956 # v10.9
+        with:
+          configurePreset: vcpkg
+          buildPreset: vcpkg
+          cmakeArgs: '-DCMAKE_BUILD_TYPE=Release'
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: logs-linux-${{ github.sha }}
+          path: ${{ github.workspace }}/vcpkg/buildtrees/**/*.log
+        if: ${{ failure() }}
+
+      - name: Upload artifact binary
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tfs-linux-${{ github.sha }}
+          path: ${{ github.workspace }}/build/tfs
+
+  build-windows:
+    name: Windows
+    runs-on: windows-2022
+
+    env:
+      VCPKG_BUILD_TYPE: release
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/x64-windows-static-release
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg_cache
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg_cache,readwrite
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Create vcpkg binary cache directory
+        run: mkdir -p "${{ github.workspace }}/vcpkg_cache"
+        shell: bash
+
+      - name: Get latest CMake
+        uses: lukka/get-cmake@7bfc9baacbbdcb5e37957ad05c3546b3e222be3c # v4.3.2
+
+      - name: Cache vcpkg binary packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: ${{ github.workspace }}/vcpkg_cache
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json', 'CMakeLists.txt', '**/CMakeLists.txt', 'CMakePresets.json') }}
+          restore-keys: |
+            vcpkg-windows-
+      - name: Run vcpkg
+        uses: lukka/run-vcpkg@5b984d559fb3e9b2c166e2bb83b9cdd1418ff930 # v11
+
+      - name: Build with CMake
+        uses: lukka/run-cmake@5d55ea7949e25f69f0ecb516d8d572297e03a956 # v10.9
+        with:
+          configurePreset: vcpkg
+          buildPreset: vcpkg
+          cmakeArgs: '-DCMAKE_BUILD_TYPE=Release'
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: logs-windows-${{ github.sha }}
+          path: ${{ github.workspace }}/vcpkg/buildtrees/**/*.log
+        if: ${{ failure() }}
+
+      - name: Upload artifact binary
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: tfs-windows-${{ github.sha }}
+          path: |
+            ${{ github.workspace }}/build/tfs.exe
+            ${{ github.workspace }}/build/*.dll
