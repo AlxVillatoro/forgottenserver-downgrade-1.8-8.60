@@ -11,7 +11,7 @@
 #include <cstdint>
 #include <unordered_map>
 
-class CombatDamage;
+struct CombatDamage;
 class Player;
 class Monster;
 
