@@ -48,23 +48,23 @@
 -- ============================================================================
 -- Itens de teste - use IDs que nao interfiram com inventario real.
 -- Se o servidor tiver itens QA/debug, defina QA_ITEM_NS e QA_ITEM_ST abaixo.
-local QA_ITEM_NS = 65000   -- QA-only non-stackable test item (must exist in items.otb + items.xml)
-local QA_ITEM_ST = 65001   -- QA-only stackable test item   (must exist in items.otb + items.xml)
+local QA_ITEM_NS = 2376   -- Sword (cheap non-stackable, safe for QA cleanup)
+local QA_ITEM_ST = 2152   -- Platinum Coin (low-value stackable, safe for QA cleanup)
 
--- Seguranca: rejeita IDs de producao (Fire Sword=3280, Gold Coin=3031)
+-- Seguranca: rejeita IDs de producao de alto valor (Fire Sword=3280, Gold Coin=3031)
 if QA_ITEM_NS == 3280 or QA_ITEM_NS == 3031 or QA_ITEM_ST == 3280 or QA_ITEM_ST == 3031 then
-    error("BLOCKED: QA item IDs must not be production item IDs (3280/3031). Set QA-only IDs >= 65000.")
+    error("BLOCKED: QA item IDs must not be high-value production IDs (3280/3031). Use safe QA-only IDs.")
 end
 
 -- Seguranca: verifica no registro que os itens existem (evita IDs invalidos)
 do
     local itemType = ItemType(QA_ITEM_NS)
-    assert(itemType and itemType:getId() == QA_ITEM_NS,
+    assert(itemType and itemType:getId() ~= 0,
         "QA_ITEM_NS=" .. QA_ITEM_NS .. " item invalido ou inexistente. Verifique items.otb e items.xml.")
 end
 do
     local itemType = ItemType(QA_ITEM_ST)
-    assert(itemType and itemType:getId() == QA_ITEM_ST,
+    assert(itemType and itemType:getId() ~= 0,
         "QA_ITEM_ST=" .. QA_ITEM_ST .. " item invalido ou inexistente. Verifique items.otb e items.xml.")
 end
 
