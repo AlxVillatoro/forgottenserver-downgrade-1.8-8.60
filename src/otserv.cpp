@@ -458,6 +458,7 @@ void startServer()
 	// Wait for all background tasks to finish before closing the Lua environment.
 	// NPCs and their NpcScriptInterface
 	g_scheduler.join();
+	g_databaseTasks.shutdown();
 	g_databaseTasks.join();
 	g_dispatcher.join();
 #ifdef STATS_ENABLED

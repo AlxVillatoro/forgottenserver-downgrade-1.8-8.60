@@ -127,8 +127,6 @@ void Connection::closeLocked(bool force)
 	}
 	closed = true;
 
-	ConnectionManager::getInstance().releaseConnection(shared_from_this());
-
 	if (protocol) {
 		g_dispatcher.addTask([protocol = protocol]() { protocol->release(); });
 	}
@@ -138,6 +136,8 @@ void Connection::closeLocked(bool force)
 	} else {
 		// will be closed by the destructor or onWriteOperation
 	}
+
+	ConnectionManager::getInstance().releaseConnection(shared_from_this());
 }
 
 void Connection::closeSocket()
