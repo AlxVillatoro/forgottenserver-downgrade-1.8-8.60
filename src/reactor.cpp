@@ -103,14 +103,6 @@ uint32_t TaskReactor::schedule(std::chrono::milliseconds delay, ReactorCallback&
 		return 0;
 	}
 
-	{
-		std::scoped_lock lock(mutex);
-		if (maxInboxSize > 0 && scheduleInbox.size() >= maxInboxSize) {
-			LOG_WARN("[TaskReactor] scheduleInbox overflow ({}), dropping scheduled task", scheduleInbox.size());
-			return 0;
-		}
-	}
-
 	uint32_t identifier = nextIdentifier.fetch_add(1, std::memory_order_relaxed) + 1;
 	if (identifier == 0) {
 		identifier = nextIdentifier.fetch_add(1, std::memory_order_relaxed) + 1;
@@ -126,6 +118,10 @@ uint32_t TaskReactor::schedule(std::chrono::milliseconds delay, ReactorCallback&
 
 	{
 		std::scoped_lock lock(mutex);
+		if (maxInboxSize > 0 && scheduleInbox.size() >= maxInboxSize) {
+			LOG_WARN("[TaskReactor] scheduleInbox overflow ({}), dropping scheduled task", scheduleInbox.size());
+			return 0;
+		}
 		scheduleInbox.push_back(std::move(task));
 	}
 

@@ -1722,10 +1722,6 @@ void LuaScriptInterface::registerFunctions()
 	registerEnum(CONDITION_CLIPORT);
 	registerEnum(CONDITION_SPELLCOOLDOWN);
 	registerEnum(CONDITION_SPELLGROUPCOOLDOWN);
-	registerEnum(CONDITION_ROOTED);
-	registerEnum(CONDITION_FEARED);
-	registerEnum(CONDITION_AGONY);
-
 	registerEnum(CreatureIconCategory_Quests);
 	registerEnum(CreatureIconCategory_Modifications);
 

@@ -302,6 +302,7 @@ bool testSendWithExpiration()
 	reactor.runOnce();
 
 	STRESS_CHECK(alive.load() == COUNT, "all alive should execute");
+	STRESS_CHECK(expired.load() == COUNT, "all expired should execute");
 	return true;
 }
 
@@ -528,7 +529,7 @@ struct LeakTracker
 	std::atomic<int>& alive;
 	LeakTracker(std::atomic<int>& ref) : alive(ref) { alive.fetch_add(1, std::memory_order_relaxed); }
 	LeakTracker(const LeakTracker& other) : alive(other.alive) { alive.fetch_add(1, std::memory_order_relaxed); }
-	LeakTracker(LeakTracker&& other) noexcept : alive(other.alive) {}
+	LeakTracker(LeakTracker&& other) noexcept : alive(other.alive) { alive.fetch_add(1, std::memory_order_relaxed); }
 	~LeakTracker() { alive.fetch_sub(1, std::memory_order_relaxed); }
 };
 
