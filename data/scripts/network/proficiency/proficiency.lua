@@ -605,9 +605,9 @@ local function sendAllInfo(player, itemIds)
 	return out:sendToPlayer(player)
 end
 
-local function sendAll(player)
+local function sendAll(player, forceCatalog)
 	local profile = loadProfile(player)
-	if profile.catalogSent ~= true and sendCatalog(player) then
+	if (forceCatalog or profile.catalogSent ~= true) and sendCatalog(player) then
 		profile.catalogSent = true
 	end
 
@@ -710,6 +710,17 @@ function System.sendEquippedExperience(player)
 	end
 end
 
+-- Validates the player, then synchronizes equipped spell augments and experience/perks
+-- through refreshProfileSpellAugments and System.sendEquippedExperience.
+function System.refreshEquippedPerks(player)
+	if not player then
+		return
+	end
+
+	refreshProfileSpellAugments(player)
+	System.sendEquippedExperience(player)
+end
+
 function System.clearPlayerCache(player)
 	if player then
 		local guid = player:getGuid()
@@ -743,7 +754,7 @@ function requestHandler.onReceive(player, msg)
 			return
 		end
 		profile.lastListInfoAt = now
-		sendAll(player)
+		sendAll(player, true)
 		return
 	end
 

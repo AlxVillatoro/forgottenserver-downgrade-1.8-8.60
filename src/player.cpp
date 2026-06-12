@@ -703,13 +703,21 @@ void Player::sendMonkData()
 void Player::addBlessing(uint8_t blessing, uint8_t count)
 {
 	if (blessing < 1 || blessing > PLAYER_MAX_BLESSINGS || blessings[blessing] == 255) return;
+	const uint8_t oldCount = blessings[blessing];
 	blessings[blessing] = static_cast<uint8_t>(std::min(255, blessings[blessing] + count));
+	if (blessings[blessing] != oldCount) {
+		sendBlessStatus();
+	}
 }
 
 void Player::removeBlessing(uint8_t blessing, uint8_t count)
 {
 	if (blessing < 1 || blessing > PLAYER_MAX_BLESSINGS) return;
+	const uint8_t oldCount = blessings[blessing];
 	blessings[blessing] = static_cast<uint8_t>(std::max(0, blessings[blessing] - count));
+	if (blessings[blessing] != oldCount) {
+		sendBlessStatus();
+	}
 }
 
 bool Player::hasBlessing(uint8_t blessing) const
@@ -5928,7 +5936,7 @@ bool Player::toggleMount(bool mount)
 bool Player::tameMount(uint16_t mountId)
 {
 	Mount* mount = g_game.mounts.getMountByID(mountId);
-	if (!mount || hasMount(mount)) {
+	if (!mount || ownsMount(mount)) {
 		return false;
 	}
 
@@ -5939,7 +5947,7 @@ bool Player::tameMount(uint16_t mountId)
 bool Player::untameMount(uint16_t mountId)
 {
 	Mount* mount = g_game.mounts.getMountByID(mountId);
-	if (!mount || hasMount(mount)) {
+	if (!mount || !ownsMount(mount)) {
 		return false;
 	}
 
@@ -5957,6 +5965,11 @@ bool Player::untameMount(uint16_t mountId)
 	return true;
 }
 
+bool Player::ownsMount(const Mount* mount) const
+{
+	return mount && mounts.contains(mount->id);
+}
+
 bool Player::hasMount(const Mount* mount) const
 {
 	if (isAccessPlayer()) {
@@ -5967,7 +5980,7 @@ bool Player::hasMount(const Mount* mount) const
 		return false;
 	}
 
-	return mounts.contains(mount->id);
+	return ownsMount(mount);
 }
 
 bool Player::hasMounts() const
