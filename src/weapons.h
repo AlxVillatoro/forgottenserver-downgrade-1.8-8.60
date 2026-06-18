@@ -138,6 +138,9 @@ public:
 	void setDisabledChain() { m_isDisabledChain = true; }
 	bool isChainDisabled() const { return m_isDisabledChain; }
 
+	void setCleavePercent(uint32_t percent) { cleavePercent = percent; }
+	uint32_t getCleavePercent() const { return cleavePercent; }
+
 protected:
 	void internalUseWeapon(Player* player, Item* item, Creature* target, int32_t damageModifier) const;
 	void internalUseWeapon(Player* player, Item* item, Tile* tile) const;
@@ -167,6 +170,7 @@ private:
 
 	double m_chainSkillValue = 0.0;
 	bool m_isDisabledChain = false;
+	uint32_t cleavePercent = 0;
 
 	std::string_view getScriptEventName() const override final;
 

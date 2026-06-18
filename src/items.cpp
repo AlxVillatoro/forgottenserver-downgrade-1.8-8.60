@@ -2493,6 +2493,8 @@ void Items::parseScriptAttribute(ItemType& it, const pugi::xml_node& attributeNo
 				} else if (key == "reset") {
 					weapon->setRequiredReset(subValue.as_uint());
 					weapon->setWieldInfo(WIELDINFO_RESETS);
+				} else if (key == "cleave") {
+					weapon->setCleavePercent(std::min<uint32_t>(100, subValue.as_uint()));
 				}
 			}
 

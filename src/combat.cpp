@@ -118,6 +118,69 @@ std::vector<Tile*> getCombatArea(const Position& centerPos, const Position& targ
 	return {tile};
 }
 
+uint32_t Combat::getCleaveDefaultPercent()
+{
+	return static_cast<uint32_t>(ConfigManager::getInteger(ConfigManager::CLEAVE_DEFAULT_PERCENT));
+}
+
+uint32_t Combat::getCleaveFistPercent()
+{
+	return static_cast<uint32_t>(ConfigManager::getInteger(ConfigManager::CLEAVE_FIST_PERCENT));
+}
+
+void Combat::doCombatCleave(Creature* caster, uint32_t primaryTargetId, const CombatDamage& originalDamage,
+                            const CombatParams& params, uint32_t cleavePercent)
+{
+	if (cleavePercent == 0 || !caster) {
+		return;
+	}
+
+	const uint32_t casterId = caster->getID();
+	const Position casterPos = caster->getPosition();
+
+	// onlyMonsters=true guarantees players are never returned, so cleave never hits players even in open-PvP zones.
+	// The getMaster check below still guards against player summons/familiars (which also satisfy isMonster()).
+	SpectatorVec spectators;
+	g_game.map.getSpectators(spectators, casterPos, false, false, 1, 1, 1, 1, true);
+
+	for (const auto& spectator : spectators) {
+		Creature* resolvedCaster = g_game.getCreatureByID(casterId);
+		if (!resolvedCaster) {
+			break;
+		}
+
+		Creature* creature = spectator.get();
+		if (!creature || creature == resolvedCaster || creature->getID() == primaryTargetId) {
+			continue;
+		}
+
+		if (Combat::canDoCombat(resolvedCaster, creature) != RETURNVALUE_NOERROR) {
+			continue;
+		}
+
+		if (auto master = creature->getMaster()) {
+			if (master->getPlayer()) {
+				continue;
+			}
+		}
+
+		CombatDamage cleaveDamage;
+		cleaveDamage.primary.type = originalDamage.primary.type;
+		cleaveDamage.primary.value = (originalDamage.primary.value * static_cast<int32_t>(cleavePercent)) / 100;
+		cleaveDamage.secondary.type = originalDamage.secondary.type;
+		cleaveDamage.secondary.value = (originalDamage.secondary.value * static_cast<int32_t>(cleavePercent)) / 100;
+		cleaveDamage.origin = originalDamage.origin;
+
+		CombatParams cleaveParams;
+		cleaveParams.impactEffect = params.impactEffect;
+		cleaveParams.combatType = params.combatType;
+		cleaveParams.blockedByArmor = params.blockedByArmor;
+		cleaveParams.blockedByShield = params.blockedByShield;
+
+		Combat::doTargetCombat(resolvedCaster, creature, cleaveDamage, cleaveParams);
+	}
+}
+
 CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target, std::string_view instantSpellName) const
 {
 	CombatDamage damage;

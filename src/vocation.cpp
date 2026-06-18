@@ -75,6 +75,8 @@ bool Vocations::loadFromXml()
 				voc.setLossSkill(attrNode.as_bool());
 			} else if (caseInsensitiveEqual(attrName, "dualwield")) {
 				voc.dualWield = attrNode.as_bool();
+			} else if (caseInsensitiveEqual(attrName, "cleave")) {
+				voc.cleave = attrNode.as_bool();
 			} else {
 				LOG_WARN(fmt::format("[Notice - Vocations::loadFromXml] Unknown attribute: \"{}\" for vocation: {}", attrName, voc.id));
 			}
