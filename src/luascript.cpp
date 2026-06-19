@@ -264,6 +264,7 @@ void ScriptEnvironment::resetEnv()
 	interface = nullptr;
 	curNpc = nullptr;
 	localMap.clear();
+	localCreatureRefs.clear();
 	tempResults.clear();
 
 	std::erase_if(tempItems, [this](auto& entry) {
@@ -355,7 +356,7 @@ void ScriptEnvironment::insertItem(uint32_t uid, Item* item)
 Thing* ScriptEnvironment::getThingByUID(uint32_t uid)
 {
 	if (uid >= 0x10000000) {
-		return g_game.getCreatureByID(uid);
+		return getCreatureByUID(uid);
 	}
 
 	if (uid <= std::numeric_limits<uint16_t>::max()) {
@@ -374,6 +375,23 @@ Thing* ScriptEnvironment::getThingByUID(uint32_t uid)
 		}
 	}
 	return nullptr;
+}
+
+Creature* ScriptEnvironment::getCreatureByUID(uint32_t uid)
+{
+	auto creatureRef = g_game.getCreatureByIDShared(uid);
+	Creature* creature = creatureRef.get();
+	if (!creature) {
+		return nullptr;
+	}
+
+	auto it = std::find_if(localCreatureRefs.begin(), localCreatureRefs.end(), [creature](const auto& ref) {
+		return ref.get() == creature;
+	});
+	if (it == localCreatureRefs.end()) {
+		localCreatureRefs.push_back(std::move(creatureRef));
+	}
+	return creature;
 }
 
 Item* ScriptEnvironment::getItemByUID(uint32_t uid)
@@ -811,6 +829,7 @@ bool LuaScriptInterface::callFunction(int params)
 	lua_pop(luaState, 1);
 	if ((lua_gettop(luaState) + params + 1) != size) {
 		LuaScriptInterface::reportError(nullptr, "Stack size changed!");
+		lua_settop(luaState, size - params - 1);
 	}
 
 #ifdef STATS_ENABLED
@@ -831,6 +850,7 @@ void LuaScriptInterface::callVoidFunction(int params)
 
 	if ((lua_gettop(luaState) + params + 1) != size) {
 		LuaScriptInterface::reportError(nullptr, "Stack size changed!");
+		lua_settop(luaState, size - params - 1);
 	}
 
 	resetScriptEnv();
@@ -846,6 +866,7 @@ ReturnValue LuaScriptInterface::callReturnValueFunction(int params)
 
 	if ((lua_gettop(luaState) + params + 1) != size) {
 		LuaScriptInterface::reportError(nullptr, "Stack size changed!");
+		lua_settop(luaState, size - params - 1);
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
 
@@ -1251,7 +1272,17 @@ Creature* Lua::getCreature(lua_State* L, int32_t arg)
 	if (isUserdata(L, arg)) {
 		return getUserdata<Creature>(L, arg);
 	}
-	Creature* creature = g_game.getCreatureByID(getInteger<uint32_t>(L, arg));
+
+	const uint32_t creatureId = getInteger<uint32_t>(L, arg);
+	std::shared_ptr<Creature> creatureRef;
+	Creature* creature = nullptr;
+	if (LuaScriptInterface::hasScriptEnv()) {
+		creature = LuaScriptInterface::getScriptEnv()->getCreatureByUID(creatureId);
+	} else {
+		creatureRef = g_game.getCreatureByIDShared(creatureId);
+		creature = creatureRef.get();
+	}
+
 	if (!creature || !Creature::isAlive(creature) || creature->isRemoved()) {
 		return nullptr;
 	}
@@ -4442,6 +4473,7 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 	// push parameters
 	for (auto parameter : std::views::reverse(timerEventDesc.parameters)) {
 		lua_rawgeti(luaState, LUA_REGISTRYINDEX, parameter);
+		const int parameterStackTop = lua_gettop(luaState);
 		if (lua_getmetatable(luaState, -1) == 0) {
 			continue;
 		}
@@ -4455,9 +4487,9 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 			case LuaData_Monster:
 			case LuaData_Npc: {
 				auto replaceCreatureParameter = [this](uint32_t creatureId) {
-					if (auto creature = g_game.getCreatureByID(creatureId)) {
-						Lua::pushUserdata<Creature>(luaState, creature);
-						Lua::setCreatureMetatable(luaState, -1, creature);
+					if (auto creature = g_game.getCreatureByIDShared(creatureId)) {
+						Lua::pushUserdata<Creature>(luaState, creature.get());
+						Lua::setCreatureMetatable(luaState, -1, creature.get());
 					} else {
 						lua_pushnil(luaState);
 					}
@@ -4487,7 +4519,7 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 					lua_pop(luaState, 1);
 				}
 
-				if (!Lua::getCreature(luaState, -1)) {
+				if (!Lua::getValidatedCreatureUserdata(luaState, -1)) {
 					lua_pushnil(luaState);
 					lua_replace(luaState, -2);
 				}
@@ -4510,6 +4542,7 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 				break;
 			}
 		}
+		lua_settop(luaState, parameterStackTop);
 	}
 
 	// call the function
@@ -4517,7 +4550,7 @@ void LuaEnvironment::executeTimerEvent(uint32_t eventIndex)
 		ScriptEnvironment* env = getScriptEnv();
 		env->setTimerEvent();
 		env->setScriptId(timerEventDesc.scriptId, this);
-		callFunction(timerEventDesc.parameters.size());
+		callVoidFunction(timerEventDesc.parameters.size());
 	} else {
 		LOG_ERROR("[Error - LuaScriptInterface::executeTimerEvent] Call stack overflow");
 	}

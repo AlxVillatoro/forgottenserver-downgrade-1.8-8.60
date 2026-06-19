@@ -58,7 +58,7 @@ private:
 class NpcEventsHandler
 {
 public:
-	NpcEventsHandler(const std::string& file, Npc* npc);
+	NpcEventsHandler(const std::string& file, const std::shared_ptr<Npc>& npc);
 	NpcEventsHandler();
 	~NpcEventsHandler();
 
@@ -182,7 +182,7 @@ public:
 	void removeList() override;
 	void addList() override;
 
-	static std::unique_ptr<Npc> createNpc(const std::string& name);
+	static std::shared_ptr<Npc> createNpc(const std::string& name);
 
 	bool canSee(const Position& pos) const override;
 

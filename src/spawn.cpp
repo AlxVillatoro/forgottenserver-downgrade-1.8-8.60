@@ -354,9 +354,8 @@ void Spawns::startup()
 	}
 
 	for (auto& npc : npcList) {
-		std::shared_ptr<Npc> npcRef(std::move(npc));
-		if (!g_game.placeCreature(npcRef.get(), npcRef->getMasterPos(), false, true)) {
-			LOG_WARN(fmt::format("[Warning - Spawns::startup] Couldn't spawn npc \"{}\" on position: {}.", npcRef->getName(), npcRef->getMasterPos()));
+		if (!g_game.placeCreature(npc.get(), npc->getMasterPos(), false, true)) {
+			LOG_WARN(fmt::format("[Warning - Spawns::startup] Couldn't spawn npc \"{}\" on position: {}.", npc->getName(), npc->getMasterPos()));
 		}
 	}
 	npcList.clear();
@@ -376,7 +375,7 @@ void Spawns::clear()
 	}
 	spawnList.clear();
 
-	// unique_ptr delete automatically
+	// shared_ptr entries release automatically when no active references remain.
 	npcList.clear();
 
 	loaded = false;
