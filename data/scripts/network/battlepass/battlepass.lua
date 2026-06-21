@@ -385,14 +385,57 @@ local function writeMissionList(out, missions)
 	end
 end
 
+local function getItemTypeInfo(itemId)
+	itemId = tonumber(itemId) or 0
+	if itemId <= 0 then
+		return 0, ""
+	end
+
+	local itemType = ItemType(itemId)
+	if not itemType then
+		return itemId, ""
+	end
+
+	local clientId = tonumber(itemType:getClientId()) or 0
+	if clientId <= 0 then
+		clientId = itemId
+	end
+
+	return clientId, itemType:getName() or ""
+end
+
+local function makeItemThingValue(itemId, itemName)
+	local clientId, resolvedName = getItemTypeInfo(itemId)
+	itemName = tostring(itemName or "")
+	if itemName ~= "" then
+		resolvedName = itemName
+	end
+
+	return {
+		thingId = clientId,
+		thingName = resolvedName,
+	}
+end
+
+local function makeItemThingValues(items)
+	local values = {}
+	items = type(items) == "table" and items or {}
+	for index = 1, math.min(#items, 0xFFFF) do
+		local item = items[index] or {}
+		values[index] = makeItemThingValue(item.itemId or item.thingId, item.itemName or item.thingName)
+	end
+	return values
+end
+
 local function writeThingValues(out, values)
 	values = type(values) == "table" and values or {}
 	local count = math.min(#values, 0xFFFF)
 	writeU16(out, count)
 	for index = 1, count do
 		local value = values[index] or {}
-		writeU16(out, value.thingId)
-		writeString(out, value.thingName)
+		local thingId = tonumber(value.thingId) or 0
+		writeU16(out, thingId)
+		writeString(out, value.thingName or "")
 	end
 end
 
@@ -577,6 +620,17 @@ function BattlePassSystem.sendRewards(player)
 				out:addByte(math.min(#step.rewards, 0xFF))
 				for index = 1, math.min(#step.rewards, 0xFF) do
 					local reward = step.rewards[index]
+					local randomValues = reward.randomValues
+					local choosableValues = reward.choosableValues
+					if reward.rewardType == 1 then
+						randomValues = {makeItemThingValue(reward.itemId, reward.itemName)}
+					elseif reward.rewardType == 2 or reward.rewardType == 4 or reward.rewardType == 12 then
+						randomValues = makeItemThingValues(reward.randomValues)
+					elseif reward.rewardType == 17 then
+						randomValues = makeItemThingValues(reward.items)
+					elseif reward.rewardType == 18 then
+						choosableValues = makeItemThingValues(reward.choosableValues)
+					end
 					writeU32(out, reward.rewardId)
 					out:addByte(clamp(reward.rewardType, 0, 0xFF))
 					writeBool(out, reward.freeReward)
@@ -587,8 +641,8 @@ function BattlePassSystem.sendRewards(player)
 					writeBool(out, reward.hasClaimedReward or reward.hasClamedReward)
 					writeU32(out, reward.durationTime)
 					out:addByte(clamp(reward.addons, 0, 0xFF))
-					writeThingValues(out, reward.randomValues)
-					writeThingValues(out, reward.choosableValues)
+					writeThingValues(out, randomValues)
+					writeThingValues(out, choosableValues)
 					writeOutfitGroups(out, reward.maleOutfit)
 					writeOutfitGroups(out, reward.femaleOutfit)
 					writeRewardItems(out, reward.items)
