@@ -2965,6 +2965,8 @@ void LuaScriptInterface::registerFunctions()
 	registerEnumIn("configKeys", ConfigManager::BOOSTED_BOSS_LOOT_BONUS);
 	registerEnumIn("configKeys", ConfigManager::BOOSTED_BOSS_KILL_BONUS);
 	registerEnumIn("configKeys", ConfigManager::DEFAULT_EXP_COLOR);
+	registerEnumIn("configKeys", ConfigManager::BOSS_DEFAULT_TIME_TO_FIGHT_AGAIN);
+	registerEnumIn("configKeys", ConfigManager::BOSS_DEFAULT_TIME_TO_DEFEAT);
 
 	// os
 	registerMethod("os", "mtime", LuaScriptInterface::luaSystemTime);
