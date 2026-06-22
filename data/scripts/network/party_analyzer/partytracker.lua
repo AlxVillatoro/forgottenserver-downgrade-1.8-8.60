@@ -74,12 +74,8 @@ local function sendPartyAnalyzer(player)
 		getOrCreateMemberData(session, id, m:getName())
 	end
 
-	local onlineMembers = {}
-	for id, m in pairs(members) do
-		if m:isOnline() then
-			onlineMembers[id] = m
-		end
-	end
+	-- Party members are represented by live Player objects, so they are online.
+	local onlineMembers = members
 
 	local onlineMemberCount = 0
 	for _ in pairs(onlineMembers) do onlineMemberCount = onlineMemberCount + 1 end
@@ -200,22 +196,10 @@ partyLogoutEvent:register()
 -- Periodic cleanup: remove sessions for offline/no-members leaders
 local partyCleanupEvent = GlobalEvent("PartyAnalyzerCleanup")
 function partyCleanupEvent.onThink(interval)
-	for leaderId, session in pairs(partySessions) do
+	for leaderId in pairs(partySessions) do
 		local leader = Player(leaderId)
 		if not leader or not leader:getParty() then
 			partySessions[leaderId] = nil
-		else
-			local hasOnline = false
-			local members = getPartyMembers(leader)
-			for _, m in pairs(members) do
-				if m:isOnline() then
-					hasOnline = true
-					break
-				end
-			end
-			if not hasOnline then
-				partySessions[leaderId] = nil
-			end
 		end
 	end
 	return true
