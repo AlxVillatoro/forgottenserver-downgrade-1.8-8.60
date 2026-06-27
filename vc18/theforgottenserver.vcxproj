@@ -323,6 +323,7 @@
     <ClInclude Include="..\src\actions.h" />
     <ClInclude Include="..\src\admin.h" />
     <ClInclude Include="..\src\astraclient.h" />
+    <ClInclude Include="..\src\fonticakclient.h" />
     <ClInclude Include="..\src\ban.h" />
     <ClInclude Include="..\src\baseevents.h" />
     <ClInclude Include="..\src\bed.h" />

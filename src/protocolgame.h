@@ -364,6 +364,8 @@ private:
 	bool isMehah = false;
 	bool isOTC = false;
 	bool isAstraClient = false;
+	bool isFonticakClient = false;
+	bool isUsingFonticakClient() const { return isFonticakClient; }
 	bool supportsAstraCreatureIcons() const { return isAstraClient; }
 	bool helperCastOnFootNextSay = false;
 	OperatingSystem_t clientOperatingSystem = CLIENTOS_NONE;

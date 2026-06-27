@@ -6,6 +6,7 @@
 #include "protocollogin.h"
 
 #include "astraclient.h"
+#include "fonticakclient.h"
 #include "ban.h"
 #include "configmanager.h"
 #include "database.h"
@@ -441,8 +442,9 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 	// Read and validate password from the message
 	auto password = msg.getString();
 
-	// Always detect AstraClient, regardless of astraClientOnly setting.
+	// Always detect AstraClient and FonticakClient, regardless of astraClientOnly setting.
 	// This allows sending the correct packet format (0x65 vs 0x64) to each client.
+	bool isFonticakClient_ = false;
 	if (msg.getBufferPosition() + 2 <= msg.getLength()) {
 		uint16_t markerLength = msg.get<uint16_t>();
 		if (markerLength > 0 && markerLength <= 64 && msg.getBufferPosition() + markerLength <= msg.getLength()) {
@@ -450,6 +452,9 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 			if (marker == AstraClient::LOGIN_MARKER && msg.getBufferPosition() + sizeof(uint32_t) <= msg.getLength()) {
 				isAstraClient_ =
 				    msg.get<uint32_t>() == AstraClient::generateSignature(operatingSystem, version, key);
+			} else if (marker == FonticakClient::LOGIN_MARKER && msg.getBufferPosition() + sizeof(uint32_t) <= msg.getLength()) {
+				isFonticakClient_ =
+				    msg.get<uint32_t>() == FonticakClient::generateSignature(operatingSystem, version, key);
 			}
 		}
 	}
@@ -461,8 +466,18 @@ void ProtocolLogin::onRecvFirstMessage(NetworkMessage& msg)
 		return;
 	}
 
+	// When fonticakClientOnly is true, reject any client that is not FonticakClient.
+	if (getBoolean(ConfigManager::FONTICAK_CLIENT_ONLY) && !isFonticakClient_) {
+		LOG_INFO("[FonticakClient] Client rejected: OTC-Fonticak required");
+		disconnectClient(FonticakClient::REQUIRED_MESSAGE);
+		return;
+	}
+
 	if (isAstraClient_) {
 		LOG_INFO(">> [AstraClient] Client accepted");
+	}
+	if (isFonticakClient_) {
+		LOG_INFO(">> [FonticakClient] Client accepted");
 	}
 
 	// Brute force check before dispatching login task

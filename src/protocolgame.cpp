@@ -5,6 +5,7 @@
 
 #include "actions.h"
 #include "astraclient.h"
+#include "fonticakclient.h"
 #include "ban.h"
 #include "character_bazaar.h"
 #include "configmanager.h"
@@ -759,6 +760,7 @@ void ProtocolGame::finishLogin(uint32_t reservedGuid, uint32_t accountId, bool l
 	player->client->isMehah = isMehah;
 	player->client->isOTC = isOTC;
 	player->client->isAstraClient = isAstraClient;
+	player->client->isFonticakClient = isFonticakClient;
 	if (isAstraClient) {
 		sendFeatures();
 	}
@@ -898,6 +900,7 @@ void ProtocolGame::connect(uint32_t playerId, OperatingSystem_t operatingSystem)
 	player->client->isMehah = isMehah;
 	player->client->isOTC = isOTC;
 	player->client->isAstraClient = isAstraClient;
+	player->client->isFonticakClient = isFonticakClient;
 	if (isAstraClient) {
 		sendFeatures();
 	}
@@ -1018,6 +1021,14 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 					    msg.get<uint32_t>() ==
 					    AstraClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
 					                                   challengeTimestamp, challengeRandom);
+				} else if (marker == FonticakClient::LOGIN_MARKER) {
+					if (msg.getBufferPosition() + sizeof(uint32_t) > msg.getLength()) {
+						break;
+					}
+					isFonticakClient =
+					    msg.get<uint32_t>() ==
+					    FonticakClient::generateSignature(static_cast<uint16_t>(operatingSystem), version, key,
+					                                   challengeTimestamp, challengeRandom);
 				} else {
 					break;
 				}
@@ -1039,6 +1050,15 @@ void ProtocolGame::onRecvFirstMessage(NetworkMessage& msg)
 			return;
 		}
 		LOG_INFO(">> [AstraClient] Client accepted");
+	}
+
+	if (getBoolean(ConfigManager::FONTICAK_CLIENT_ONLY)) {
+		if (!isFonticakClient) {
+			LOG_INFO("[FonticakClient] Client rejected: OTC-Fonticak required");
+			disconnectClient(FonticakClient::REQUIRED_MESSAGE);
+			return;
+		}
+		LOG_INFO(">> [FonticakClient] Client accepted");
 	}
 
 	if (isOTC) {
