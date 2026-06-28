@@ -1,13 +1,6 @@
-local antiDivulgacao = {}
+local antiAdvertising = {}
 
-antiDivulgacao.config = {
-    mensagemSubstituta = "DRAGON SOULS ATS - O MELHOR SERVIDOR 7.92 DA ATUALIDADE! VENHA JOGAR CONOSCO!",
-    mostrarAviso = true,
-    mensagemAviso = "Sua mensagem foi bloqueada por conter conteúdo proibido.",
-    logarTentativas = true
-}
-
-antiDivulgacao.palavrasBloqueadas = {
+antiAdvertising.blockedWords = {
     "ddns", "com", "br", "online", "org", "net", 
     "http", "https", "www", "sytes",
     "killermamonas", "normandierpg", "ilusion pex", "pysco",
@@ -33,10 +26,10 @@ antiDivulgacao.palavrasBloqueadas = {
     "arcana nemesis", "script", "scripts", "tyr"
 }
 
-function antiDivulgacao.normalizarTexto(texto)
-    if not texto then return "" end
-    texto = texto:lower()
-    local acentos = {
+function antiAdvertising.normalizeText(text)
+    if not text then return "" end
+    text = text:lower()
+    local accents = {
         ["á"] = "a", ["à"] = "a", ["ã"] = "a", ["â"] = "a", ["ä"] = "a",
         ["é"] = "e", ["è"] = "e", ["ê"] = "e", ["ë"] = "e",
         ["í"] = "i", ["ì"] = "i", ["î"] = "i", ["ï"] = "i",
@@ -44,37 +37,38 @@ function antiDivulgacao.normalizarTexto(texto)
         ["ú"] = "u", ["ù"] = "u", ["û"] = "u", ["ü"] = "u",
         ["ç"] = "c", ["ñ"] = "n"
     }
-    for acento, normal in pairs(acentos) do
-        texto = texto:gsub(acento, normal)
+    for accent, normal in pairs(accents) do
+        text = text:gsub(accent, normal)
     end
-    return texto
+    return text
 end
 
-function antiDivulgacao.verificarTexto(texto)
-    if not texto or texto == "" then
+function antiAdvertising.checkText(text)
+    if not text or text == "" then
         return false, nil
     end
-    local textoNormalizado = antiDivulgacao.normalizarTexto(texto)
-    for _, palavra in ipairs(antiDivulgacao.palavrasBloqueadas) do
-        if textoNormalizado:find(palavra, 1, true) then
-            return true, palavra
+    local normalizedText = antiAdvertising.normalizeText(text)
+    for _, word in ipairs(antiAdvertising.blockedWords) do
+        if normalizedText:find(word, 1, true) then
+            return true, word
         end
     end
     return false, nil
 end
 
-function checkMessage(texto, isStaff)
+-- Global function called by the C++ engine (Game::playerSay)
+function checkMessage(text, isStaff)
     if isStaff then
         return false, ""
     end
     
-    local contemPalavra, palavra = antiDivulgacao.verificarTexto(texto)
+    local hasBlockedWord, word = antiAdvertising.checkText(text)
     
-    if contemPalavra then
-        return true, antiDivulgacao.config.mensagemSubstituta
+    if hasBlockedWord then
+        return true, "[Mensaje bloqueado por contener publicidad]."
     end
     
     return false, ""
 end
 
-return antiDivulgacao
+return antiAdvertising

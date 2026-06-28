@@ -107,8 +107,8 @@ void sighupHandler()
 	g_chat->load();
 	LOG_INFO("Reloaded chatchannels.");
 
-	g_luaEnvironment.loadFile("data/global.lua");
-	LOG_INFO("Reloaded global.lua.");
+	g_luaEnvironment.loadFile("data/lib/lib.lua");
+	LOG_INFO("Reloaded lib.lua.");
 
 	lua_gc(g_luaEnvironment.getLuaState(), LUA_GCCOLLECT, 0);
 }

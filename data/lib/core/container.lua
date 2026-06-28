@@ -1,5 +1,9 @@
 function Container:isContainer() return true end
 
+function getLootRandom()
+	return math.random(0, MAX_LOOTCHANCE) / configManager.getNumber(configKeys.RATE_LOOT)
+end
+
 function Container:createLootItem(lootItem)
 	if self:getEmptySlots() == 0 then return true end
 
@@ -86,4 +90,25 @@ function Container:getContentDescription(colorizedLootValue)
 	end
 
 	return "nothing"
+end
+
+function Container:getListOfContainerItems(container)
+    if not container:isContainer() then
+        return false
+    end
+    
+    local containers, items = {}, {}
+    table.insert(containers, container)
+    while #containers > 0 do
+        for i = 0, containers[1]:getSize() - 1 do  
+            local item = containers[1]:getItem(i)
+            table.insert(items, item)
+            if item:isContainer() then
+                table.insert(containers, item)
+            end
+        end
+        table.remove(containers, 1)
+    end
+    
+    return items
 end

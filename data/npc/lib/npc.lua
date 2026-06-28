@@ -1154,7 +1154,10 @@ do
 			local function parseText(cid, text)
 				local player = Player(cid)
 				local playerName = player and player:getName() or ""
-				local parseInfo = { [TAG_PLAYERNAME] = playerName }
+				local parseInfo = {
+					[TAG_PLAYERNAME] = playerName,
+					["|TIME|"] = Game.getFormattedWorldTime(),
+				}
 				if type(text) == "table" then
 					local parsed = {}
 					for index = 1, #text do
@@ -1237,7 +1240,10 @@ do
 				end
 
 				if params.text then
-					local parseInfo = { [TAG_PLAYERNAME] = player:getName() }
+					local parseInfo = {
+						[TAG_PLAYERNAME] = player:getName(),
+						["|TIME|"] = Game.getFormattedWorldTime(),
+					}
 					local text = params.text
 					if type(text) == "table" then
 						local parsed = {}

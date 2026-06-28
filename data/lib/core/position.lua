@@ -132,3 +132,11 @@ function Position:notifySummonAppear(summon)
 		if monster and monster ~= summon and monster:canSeeCreature(summon) then monster:addTarget(summon) end
 	end
 end
+
+function Position.getDistanceBetween(firstPosition, secondPosition)
+	local xDif = math.abs(firstPosition.x - secondPosition.x)
+	local yDif = math.abs(firstPosition.y - secondPosition.y)
+	local posDif = math.max(xDif, yDif)
+	if firstPosition.z ~= secondPosition.z then posDif = posDif + 15 end
+	return posDif
+end

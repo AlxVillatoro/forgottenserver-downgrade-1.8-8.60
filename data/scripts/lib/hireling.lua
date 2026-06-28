@@ -359,7 +359,7 @@ function Hireling:canTalkTo(player)
 		return false
 	end
 
-	if getDistanceBetween(player:getPosition(), self:getPosition()) > 3 then
+	if Position.getDistanceBetween(player:getPosition(), self:getPosition()) > 3 then
 		return false
 	end
 

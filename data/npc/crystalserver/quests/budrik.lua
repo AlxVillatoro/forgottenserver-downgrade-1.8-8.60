@@ -138,7 +138,7 @@ keywordHandler:addKeyword({ "mine" }, StdModule.say, { npcHandler = npcHandler, 
 keywordHandler:addAliasKeyword({ "dungeon" })
 keywordHandler:addKeyword({ "monster" }, StdModule.say, { npcHandler = npcHandler, text = "We occasionally come across nasty beasts in the deepest mines." })
 keywordHandler:addKeyword({ "name" }, StdModule.say, { npcHandler = npcHandler, text = "My name is Budrik Deepdigger, Son of Earth, from the Molten Rock." })
-keywordHandler:addKeyword({ "time" }, StdModule.say, { npcHandler = npcHandler, text = { "Precisely " .. getFormattedWorldTime() .. ", young one." } })
+keywordHandler:addKeyword({ "time" }, StdModule.say, { npcHandler = npcHandler, text = { "Precisely |TIME|, young one." } })
 keywordHandler:addKeyword({ "trouble" }, StdModule.say, { npcHandler = npcHandler, text = "The {Horned Fox} is leading his bandits in sneak attacks and raids on us." })
 keywordHandler:addKeyword({ "shearton softbeard" }, StdModule.say, {
 	npcHandler = npcHandler,

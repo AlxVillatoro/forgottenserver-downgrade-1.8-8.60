@@ -381,7 +381,7 @@ if NpcHandler == nil then
                 local msg = self:getMessage(MESSAGE_FAREWELL)
                 local player = Player(cid)
                 local playerName = player and player:getName() or -1
-                local parseInfo = {[TAG_PLAYERNAME] = playerName}
+                local parseInfo = {[TAG_PLAYERNAME] = playerName, ["|TIME|"] = Game.getFormattedWorldTime()}
                 self:resetNpc(cid)
                 msg = self:parseMessage(msg, parseInfo)
                 self:say(msg, cid, true)
@@ -399,7 +399,7 @@ if NpcHandler == nil then
                     local msg = self:getMessage(MESSAGE_GREET)
                     local player = Player(cid)
                     local playerName = player and player:getName() or -1
-                    local parseInfo = {[TAG_PLAYERNAME] = playerName}
+                    local parseInfo = {[TAG_PLAYERNAME] = playerName, ["|TIME|"] = Game.getFormattedWorldTime()}
                     msg = self:parseMessage(msg, parseInfo)
                     self:say(msg, cid, true)
                 else
@@ -480,7 +480,7 @@ if NpcHandler == nil then
                 if self:isFocused(cid) then
                     local player = Player(cid)
                     local playerName = player and player:getName() or -1
-                    local parseInfo = {[TAG_PLAYERNAME] = playerName}
+                    local parseInfo = {[TAG_PLAYERNAME] = playerName, ["|TIME|"] = Game.getFormattedWorldTime()}
                     local msg = self:parseMessage(self:getMessage(
                                                       MESSAGE_ONCLOSESHOP),
                                                   parseInfo)
@@ -602,7 +602,7 @@ if NpcHandler == nil then
                         local playerName = player:getName()
                         local playerSex = player:getSex()
 
-                        local parseInfo = {[TAG_PLAYERNAME] = playerName}
+                        local parseInfo = {[TAG_PLAYERNAME] = playerName, ["|TIME|"] = Game.getFormattedWorldTime()}
                         local message = self:parseMessage(msg, parseInfo)
 
                         local msg_male = self:getMessage(MESSAGE_WALKAWAY_MALE)

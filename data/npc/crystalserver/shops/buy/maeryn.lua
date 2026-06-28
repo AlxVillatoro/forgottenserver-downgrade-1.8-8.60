@@ -118,7 +118,7 @@ local function creatureSayCallback(npc, creature, type, message)
 	elseif MsgContains(message, "maeryn") then
 		npcHandler:say("Yes, that's me.", npc, creature)
 	elseif MsgContains(message, "time") then
-		npcHandler:say("It's exactly " .. getFormattedWorldTime() .. ".", npc, creature)
+		npcHandler:say("It's exactly " .. Game.getFormattedWorldTime() .. ".", npc, creature)
 	elseif MsgContains(message, "job") then
 		npcHandler:say("I'm the protector of this little village. A bit of a self-proclaimed function, I admit, but someone has to watch over {Grimvale}. It is a {dangerous} place.", npc, creature)
 	elseif MsgContains(message, "grimvale") then

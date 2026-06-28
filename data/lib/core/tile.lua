@@ -83,13 +83,13 @@ function Tile:isRopeSpot()
 		return false
 	end
 
-	if table.contains(ropeSpots, self:getGround():getId()) then
+	if table.contains({ 386, 421, 7762, 12202, 12936, 14238, 17238, 23363, 21965, 21966, 21967, 21968 }, self:getGround():getId()) then
 		return true
 	end
 
 	for i = 1, self:getTopItemCount() do
 		local thing = self:getThing(i)
-		if thing and table.contains(specialRopeSpots, thing:getId()) then
+		if thing and table.contains({ 12935 }, thing:getId()) then
 			return true
 		end
 	end

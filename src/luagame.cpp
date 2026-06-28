@@ -960,7 +960,7 @@ int luaGameReload(lua_State* L)
 	// Game.reload(reloadType)
 	ReloadTypes_t reloadType = getInteger<ReloadTypes_t>(L, 1);
 	if (reloadType == RELOAD_TYPE_GLOBAL) {
-		pushBoolean(L, g_luaEnvironment.loadFile("data/global.lua") == 0);
+		pushBoolean(L, g_luaEnvironment.loadFile("data/lib/lib.lua") == 0 && g_luaEnvironment.loadFile("data/anti_advertising.lua") == 0);
 		pushBoolean(L, g_scripts->loadScripts("scripts/lib", true, true));
 		lua_gc(g_luaEnvironment.getLuaState(), LUA_GCCOLLECT, 0);
 		return 2;

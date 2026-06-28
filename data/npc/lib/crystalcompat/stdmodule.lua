@@ -79,6 +79,7 @@ function CrystalStdModule.say(...)
 
 	local parseInfo = {
 		[TAG_PLAYERNAME] = player:getName(),
+		["|TIME|"] = Game.getFormattedWorldTime(),
 	}
 
 	if parameters.cost then

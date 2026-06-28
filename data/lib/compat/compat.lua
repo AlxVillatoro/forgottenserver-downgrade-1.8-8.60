@@ -2113,3 +2113,35 @@ do
 		end
 	end
 end
+
+---@generic T: table, K, V
+---@param array T The table to search in
+---@param value K The value to search for
+---@return boolean found Whether the value was found
+table.contains = function(array, value)
+	for _, targetColumn in pairs(array) do if targetColumn == value then return true end end
+	return false
+end
+
+---@param str string
+---@param sep string
+---@return table<integer, string>
+string.split = function(str, sep)
+	local res = {}
+	for v in str:gmatch("([^" .. sep .. "]+)") do res[#res + 1] = v end
+	return res
+end
+
+---@param str string
+---@param sep string
+---@return table<integer, string>
+string.splitTrimmed = function(str, sep)
+	local res = {}
+	for v in str:gmatch("([^" .. sep .. "]+)") do res[#res + 1] = v:trim() end
+	return res
+end
+
+---@param str string
+---@return string
+string.trim = function(str) return str:match '^()%s*$' and '' or str:match '^%s*(.*%S)' end
+

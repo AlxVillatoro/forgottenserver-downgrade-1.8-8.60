@@ -128,7 +128,7 @@ function serverstartup.onStartup()
 	if configManager.getBoolean(configKeys.CHECK_DUPLICATE_STORAGE_KEYS) then
 		local variableNames = {"AccountStorageKeys", "PlayerStorageKeys", "GlobalStorageKeys", "actionIds", "uniqueIds"}
 		for _, variableName in ipairs(variableNames) do
-			local duplicates = checkDuplicateStorageKeys(variableName)
+			local duplicates = Game.checkDuplicateStorageKeys(variableName)
 			if duplicates then
 				local message = "Duplicate keys found: " .. table.concat(duplicates, ", ")
 				print(">> Checking " .. variableName .. ": " .. message)
