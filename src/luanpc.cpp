@@ -17,9 +17,11 @@ int luaNpcCreate(lua_State* L)
 {
 	// Npc([id or name or userdata])
 	Npc* npc;
+	std::shared_ptr<Npc> npcRef;
 	if (lua_gettop(L) >= 2) {
 		if (isInteger(L, 2)) {
-			npc = g_game.getNpcByID(getInteger<uint32_t>(L, 2));
+			npcRef = g_game.getNpcByIDShared(getInteger<uint32_t>(L, 2));
+			npc = npcRef.get();
 		} else if (isString(L, 2)) {
 			npc = g_game.getNpcByName(getString(L, 2));
 		} else if (isUserdata(L, 2)) {
@@ -107,8 +109,8 @@ int luaNpcSetSpeechBubble(lua_State* L)
 	
 	uint8_t bubbleType = getInteger<uint8_t>(L, 2);
 	
-	if (bubbleType >= SPEECHBUBBLE_LAST) {
-		reportErrorFunc(L, "Invalid speech bubble type. Valid values: 0-4 (SPEECHBUBBLE_NONE to SPEECHBUBBLE_QUESTTRADER)");
+	if (bubbleType > SPEECHBUBBLE_QUESTTRADER && bubbleType != SPEECHBUBBLE_HIRELING) {
+		reportErrorFunc(L, "Invalid speech bubble type. Valid values: 0-4 or 7 (SPEECHBUBBLE_HIRELING)");
 		pushBoolean(L, false);
 		return 1;
 	}

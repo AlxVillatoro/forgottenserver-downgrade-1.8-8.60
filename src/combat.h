@@ -144,6 +144,10 @@ public:
 	static void doTargetCombat(Creature* caster, Creature* target, CombatDamage& damage, const CombatParams& params);
 	static void doAreaCombat(Creature* caster, const Position& position, const AreaCombat* area, CombatDamage& damage,
 	                         const CombatParams& params);
+	static void doCombatCleave(Creature* caster, uint32_t primaryTargetId, const CombatDamage& originalDamage,
+	                           const CombatParams& params, uint32_t cleavePercent);
+	static uint32_t getCleaveDefaultPercent();
+	static uint32_t getCleaveFistPercent();
 
 	bool setCallback(CallBackParam key);
 	CallBack* getCallback(CallBackParam key);
@@ -169,7 +173,7 @@ public:
 	void setChainCallback(uint8_t chainTargets, uint8_t chainDistance, bool backtracking);
 
 private:
-	static void doChainEffect(const Position& origin, const Position& pos, uint8_t effect);
+	static void doChainEffect(const Position& origin, const Position& pos, uint8_t effect, uint32_t instanceId);
 	static std::vector<std::pair<Position, std::vector<uint32_t>>> pickChainTargets(
 	    Creature* caster, const CombatParams& params, uint8_t chainDistance, uint8_t maxTargets,
 	    bool aggressive, bool backtracking, Creature* initialTarget = nullptr);

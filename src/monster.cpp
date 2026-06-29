@@ -375,8 +375,8 @@ void Monster::onCreatureMove(Creature* creature, const Tile* newTile, const Posi
 		Lua::pushUserdata<Creature>(L, creature);
 		Lua::setCreatureMetatable(L, -1, creature);
 
-		Lua::pushPosition(L, oldPos);
-		Lua::pushPosition(L, newPos);
+		Lua::pushPosition(L, oldPos, 0, creature->getInstanceID());
+		Lua::pushPosition(L, newPos, 0, creature->getInstanceID());
 
 		scriptInterface->callFunction(4);
 	}
@@ -603,6 +603,8 @@ void Monster::updateTargetList()
 	for (const auto& spectator : spectators) {
 		onCreatureFound(spectator.get());
 	}
+
+	clearFactionTargetIfNotAllowed();
 }
 
 void Monster::clearTargetList()
@@ -634,9 +636,6 @@ void Monster::onCreatureFound(Creature* creature, bool pushFront /* = false*/)
 	}
 
 	if (isOpponent(creature)) {
-		if (!isFamiliar() && creature->getZone() == ZONE_PROTECTION) {
-			return;
-		}
 		addTarget(creature, pushFront);
 	}
 
@@ -657,6 +656,7 @@ void Monster::onCreatureEnter(Creature* creature)
 
 	if (creature->isPlayer()) {
 		// A player entered, we might need to notice other monsters now
+		lastPlayerNearbyCheck = 0;
 		updateTargetList();
 	}
 }
@@ -680,14 +680,110 @@ bool Monster::hasPlayerNearby(int32_t range /* = 20*/) const
 	return cachedPlayerNearby;
 }
 
+Faction_t Monster::getFaction() const
+{
+	if (auto master = getMaster()) {
+		return master->getFaction();
+	}
+	return mType->info.faction;
+}
+
+bool Monster::isEnemyFaction(Faction_t faction) const
+{
+	if (faction == FACTION_DEFAULT) {
+		return false;
+	}
+
+	if (auto master = getMaster()) {
+		if (const Monster* masterMonster = master->getMonster()) {
+			return masterMonster->isEnemyFaction(faction);
+		}
+	}
+
+	return mType->info.enemyFactions.find(faction) != mType->info.enemyFactions.end();
+}
+
+bool Monster::canAttackByFaction(const Creature* creature) const
+{
+	return isFactionCombatAllowed() && isFactionCombatTarget(creature);
+}
+
+bool Monster::isFactionCombatTarget(const Creature* creature) const
+{
+	if (!creature || getFaction() == FACTION_DEFAULT) {
+		return false;
+	}
+
+	const Monster* targetMonster = creature->getMonster();
+	return targetMonster && !creature->isSummon() && isEnemyFaction(targetMonster->getFaction());
+}
+
+bool Monster::isFactionCombatAllowed() const
+{
+	if (!ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM) || getFaction() == FACTION_DEFAULT) {
+		return false;
+	}
+
+	return !ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY) || hasPlayerNearby(20);
+}
+
+bool Monster::clearFactionTargetIfNotAllowed()
+{
+	const auto hasFactionTarget = [this](const std::weak_ptr<Creature>& weakRef) {
+		auto creature = weakRef.lock();
+		return creature && isFactionCombatTarget(creature.get());
+	};
+
+	const bool hasCurrentFactionTarget = hasFactionTarget(attackedCreature) || hasFactionTarget(followCreature) ||
+	                                     std::any_of(targetList.begin(), targetList.end(), hasFactionTarget);
+	if (!hasCurrentFactionTarget || isFactionCombatAllowed()) {
+		return false;
+	}
+
+	bool changed = false;
+	if (hasFactionTarget(attackedCreature)) {
+		setAttackedCreature(nullptr);
+		changed = true;
+	}
+	if (hasFactionTarget(followCreature)) {
+		setFollowCreature(nullptr);
+		changed = true;
+	}
+
+	const size_t oldSize = targetList.size();
+	std::erase_if(targetList, [this](const auto& weakRef) {
+		auto creature = weakRef.lock();
+		return !creature || isFactionCombatTarget(creature.get());
+	});
+	changed = changed || targetList.size() != oldSize;
+
+	if (changed) {
+		updateIdleStatus();
+	}
+	return changed;
+}
+
 bool Monster::isFriend(const Creature* creature) const
 {
+	if (!creature) {
+		return false;
+	}
+
 	if (creature == this) {
 		return true;
 	}
 
-	if (mType->info.faction != FACTION_DEFAULT && mType->info.faction == creature->getFaction()) {
-		return true;
+	if (ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM)) {
+		if (const Monster* otherMonster = creature->getMonster(); otherMonster && !creature->isSummon()) {
+			if (isEnemyFaction(otherMonster->getFaction())) {
+				return false;
+			}
+
+			const Faction_t myFaction = getFaction();
+			if (myFaction != FACTION_DEFAULT && myFaction == otherMonster->getFaction()) {
+				return true;
+			}
+		}
 	}
 
 	auto master = getMaster();
@@ -709,9 +805,6 @@ bool Monster::isFriend(const Creature* creature) const
 			return true;
 		}
 	} else if (creature->isMonster() && !creature->isSummon()) {
-		if (isOpponent(creature)) {
-			return false;
-		}
 		return true;
 	}
 
@@ -720,31 +813,44 @@ bool Monster::isFriend(const Creature* creature) const
 
 bool Monster::isOpponent(const Creature* creature) const
 {
-	if (creature == this) {
+	if (!creature || creature == this || creature->isRemoved() || creature->isDead()) {
 		return false;
 	}
 
-	auto creatureMaster = creature->getMaster();
-	if ((creature->getPlayer() && !creature->getPlayer()->hasFlag(PlayerFlag_IgnoredByMonsters)) ||
-	    (creatureMaster && creatureMaster->getPlayer())) {
-		return true;
+	if (creature->getNpc()) {
+		return false;
 	}
 
-	if (mType->info.enemyFactions.count(creature->getFaction()) > 0) {
-		if (creature->isMonster() && !creature->isSummon() && !hasPlayerNearby(20)) {
-			return false;
-		}
-		return true;
+	const Player* player = creature->getPlayer();
+	if (player && player->hasFlag(PlayerFlag_IgnoredByMonsters)) {
+		return false;
 	}
 
 	auto master = getMaster();
-	if (isSummon() && master && master->getPlayer()) {
-		if (creature != master.get()) {
-			return true;
+	const bool selfIsPlayerSummon = isSummon() && master && master->getPlayer();
+	if (selfIsPlayerSummon) {
+		const Player* masterPlayer = master->getPlayer();
+		const Player* targetPlayer = player;
+		if (!targetPlayer) {
+			auto targetMaster = creature->getMaster();
+			targetPlayer = targetMaster ? targetMaster->getPlayer() : nullptr;
 		}
+
+		return creature != master.get() &&
+		       (!targetPlayer || (targetPlayer != masterPlayer && !masterPlayer->isPartner(targetPlayer)));
 	}
 
-	return false;
+	auto creatureMaster = creature->getMaster();
+	const Player* creatureMasterPlayer = creatureMaster ? creatureMaster->getPlayer() : nullptr;
+	if (creatureMasterPlayer && creatureMasterPlayer->hasFlag(PlayerFlag_IgnoredByMonsters)) {
+		return false;
+	}
+
+	if (player || creatureMasterPlayer) {
+		return true;
+	}
+
+	return canAttackByFaction(creature);
 }
 
 bool Monster::isFamiliar() const
@@ -782,6 +888,7 @@ void Monster::onCreatureLeave(Creature* creature)
 
 	if (creature->isPlayer()) {
 		// A player left, we might need to stop fighting other monsters
+		lastPlayerNearbyCheck = 0;
 		updateTargetList();
 	}
 }
@@ -792,9 +899,27 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 		return false;
 	}
 
-	std::vector<Creature*> resultList;
+	std::vector<std::shared_ptr<Creature>> resultList;
 	resultList.reserve(targetList.size());
 	const Position& myPos = getPosition();
+	const bool preferPlayers = ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_SYSTEM) &&
+	                           ConfigManager::getBoolean(ConfigManager::MONSTER_FACTION_PREFER_PLAYERS);
+	const auto isPlayerTarget = [](const std::shared_ptr<Creature>& creature) {
+		if (!creature) {
+			return false;
+		}
+
+		if (creature->getPlayer()) {
+			return true;
+		}
+
+		auto master = creature->getMaster();
+		return master && master->getPlayer();
+	};
+	const auto preferCandidate = [&](const std::shared_ptr<Creature>& candidate,
+	                                 const std::shared_ptr<Creature>& current) {
+		return preferPlayers && isPlayerTarget(candidate) && !isPlayerTarget(current);
+	};
 
 	for (const auto& weakRef : targetList) {
 		auto creature = weakRef.lock();
@@ -805,14 +930,14 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 		auto follow = followCreature.lock();
 		if (follow.get() != creature.get() && isTarget(creature.get())) {
 			if (searchType == TARGETSEARCH_RANDOM || canUseAttack(myPos, creature.get())) {
-				resultList.push_back(creature.get());
+				resultList.push_back(std::move(creature));
 			}
 		}
 	}
 
 	switch (searchType) {
 		case TARGETSEARCH_NEAREST: {
-			Creature* target = nullptr;
+			std::shared_ptr<Creature> target;
 			if (!resultList.empty()) {
 				auto it = resultList.begin();
 				target = *it;
@@ -821,13 +946,14 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 					const Position& targetPosition = target->getPosition();
 					int32_t minRange = myPos.getDistanceX(targetPosition) + myPos.getDistanceY(targetPosition);
 					do {
-						Creature* creature = *it;
+						const auto& creature = *it;
 						if (!creature || creature->isRemoved() || !creature->getTile()) {
 							continue;
 						}
 
 						const Position& pos = creature->getPosition();
-						if (int32_t distance = myPos.getDistanceX(pos) + myPos.getDistanceY(pos); distance < minRange) {
+						const int32_t distance = myPos.getDistanceX(pos) + myPos.getDistanceY(pos);
+						if (distance < minRange || (distance == minRange && preferCandidate(creature, target))) {
 							target = creature;
 							minRange = distance;
 						}
@@ -846,25 +972,27 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 					}
 
 					const Position& pos = creature->getPosition();
-					if (int32_t distance = myPos.getDistanceX(pos) + myPos.getDistanceY(pos); distance < minRange) {
-						target = creature.get();
+					const int32_t distance = myPos.getDistanceX(pos) + myPos.getDistanceY(pos);
+					if (distance < minRange || (distance == minRange && preferCandidate(creature, target))) {
+						target = creature;
 						minRange = distance;
 					}
 				}
 			}
 
-			if (target && selectTarget(target)) {
+			if (target && selectTarget(target.get())) {
 				return true;
 			}
 			break;
 		}
 
 		case TARGETSEARCH_HEALTH: {
-			Creature* target = nullptr;
+			std::shared_ptr<Creature> target;
 			int32_t minHealth = std::numeric_limits<int32_t>::max();
 			if (!resultList.empty()) {
-				for (Creature* creature : resultList) {
-					if (int32_t health = creature->getHealth(); health < minHealth) {
+				for (const auto& creature : resultList) {
+					const int32_t health = creature->getHealth();
+					if (health < minHealth || (health == minHealth && preferCandidate(creature, target))) {
 						target = creature;
 						minHealth = health;
 					}
@@ -876,27 +1004,29 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 						continue;
 					}
 
-					if (int32_t health = creature->getHealth(); health < minHealth) {
-						target = creature.get();
+					const int32_t health = creature->getHealth();
+					if (health < minHealth || (health == minHealth && preferCandidate(creature, target))) {
+						target = creature;
 						minHealth = health;
 					}
 				}
 			}
 
-			if (target && selectTarget(target)) {
+			if (target && selectTarget(target.get())) {
 				return true;
 			}
 			break;
 		}
 
 		case TARGETSEARCH_DAMAGE: {
-			Creature* target = nullptr;
+			std::shared_ptr<Creature> target;
 			int32_t maxDamage = -1;
 			if (!resultList.empty()) {
-				for (Creature* creature : resultList) {
+				for (const auto& creature : resultList) {
 					auto it = damageMap.find(creature->getID());
 					if (it != damageMap.end()) {
-						if (it->second.total > maxDamage) {
+						if (it->second.total > maxDamage ||
+						    (it->second.total == maxDamage && preferCandidate(creature, target))) {
 							target = creature;
 							maxDamage = it->second.total;
 						}
@@ -911,15 +1041,16 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 
 					auto it = damageMap.find(creature->getID());
 					if (it != damageMap.end()) {
-						if (it->second.total > maxDamage) {
-							target = creature.get();
+						if (it->second.total > maxDamage ||
+						    (it->second.total == maxDamage && preferCandidate(creature, target))) {
+							target = creature;
 							maxDamage = it->second.total;
 						}
 					}
 				}
 			}
 
-			if (target && selectTarget(target)) {
+			if (target && selectTarget(target.get())) {
 				return true;
 			}
 			break;
@@ -930,7 +1061,20 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 		case TARGETSEARCH_RANDOM:
 		default: {
 			if (!resultList.empty()) {
-				return selectTarget(resultList[uniform_random(0, resultList.size() - 1)]);
+				if (preferPlayers) {
+					std::vector<std::shared_ptr<Creature>> playerTargets;
+					playerTargets.reserve(resultList.size());
+					for (const auto& creature : resultList) {
+						if (isPlayerTarget(creature)) {
+							playerTargets.push_back(creature);
+						}
+					}
+					if (!playerTargets.empty()) {
+						return selectTarget(playerTargets[uniform_random(0, playerTargets.size() - 1)].get());
+					}
+				}
+
+				return selectTarget(resultList[uniform_random(0, resultList.size() - 1)].get());
 			}
 
 			if (searchType == TARGETSEARCH_ATTACKRANGE) {
@@ -942,6 +1086,20 @@ bool Monster::searchTarget(TargetSearchType_t searchType /*= TARGETSEARCH_DEFAUL
 	}
 
 	// lets just pick the first target in the list
+	if (preferPlayers) {
+		for (const auto& weakRef : targetList) {
+			auto target = weakRef.lock();
+			if (!target || target->isRemoved() || !target->getTile()) {
+				continue;
+			}
+
+			auto follow = followCreature.lock();
+			if (follow.get() != target.get() && isTarget(target.get()) && isPlayerTarget(target) && selectTarget(target.get())) {
+				return true;
+			}
+		}
+	}
+
 	for (const auto& weakRef : targetList) {
 		auto target = weakRef.lock();
 		if (!target || target->isRemoved() || !target->getTile()) {
@@ -987,9 +1145,9 @@ bool Monster::selectBlockerTarget()
 		return false;
 	}
 
-	Creature* blocker = tile->getTopCreature();
-	if (blocker && blocker != fc.get() && isOpponent(blocker)) {
-		return selectTarget(blocker);
+	auto blocker = g_game.getCreatureSharedRef(tile->getTopCreature());
+	if (blocker && blocker != fc && isOpponent(blocker.get())) {
+		return selectTarget(blocker.get());
 	}
 
 	return false;
@@ -1015,6 +1173,29 @@ void Monster::onFollowCreatureComplete(const Creature* creature)
 	}
 }
 
+int32_t Monster::getReflectPercent(CombatType_t combatType) const
+{
+	auto it = mType->info.reflectMap.find(combatType);
+	if (it == mType->info.reflectMap.end()) {
+		return 0;
+	}
+	return it->second;
+}
+
+int32_t Monster::getHealingCombatValue(CombatType_t combatType) const
+{
+	auto it = mType->info.healingMap.find(combatType);
+	if (it == mType->info.healingMap.end()) {
+		return 0;
+	}
+	return it->second;
+}
+
+uint16_t Monster::getCriticalChance() const
+{
+	return mType->info.critChance;
+}
+
 BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatType_t combatType, int32_t& damage,
                               bool checkDefense /* = false*/, bool checkArmor /* = false*/, bool field /* = false */,
                               bool ignoreResistances /* = false */, CombatOrigin origin /* = ORIGIN_NONE */)
@@ -1033,6 +1214,35 @@ BlockType_t Monster::blockHit(const std::shared_ptr<Creature>& attacker, CombatT
 			if (damage <= 0) {
 				damage = 0;
 				blockType = BLOCK_ARMOR;
+			}
+		}
+	}
+
+	if (!ignoreResistances && damage > 0 && combatType != COMBAT_HEALING) {
+		const int32_t healingPercent = getHealingCombatValue(combatType);
+		if (healingPercent > 0) {
+			const int32_t healValue = static_cast<int32_t>(std::ceil(damage * (healingPercent / 100.)));
+			damage = 0;
+
+			if (healValue > 0) {
+				if (auto self = asCreature()) {
+					CombatDamage healDamage;
+					healDamage.primary.type = COMBAT_HEALING;
+					healDamage.primary.value = healValue;
+					healDamage.origin = ORIGIN_NONE;
+					g_game.combatChangeHealth(self, self, healDamage);
+				}
+			}
+		} else if (origin != ORIGIN_REFLECT && attacker) {
+			const int32_t reflectPercent = getReflectPercent(combatType);
+			if (reflectPercent > 0) {
+				if (auto self = asCreature()) {
+					CombatDamage reflectDamage;
+					reflectDamage.primary.type = combatType;
+					reflectDamage.primary.value = -static_cast<int32_t>(std::ceil(damage * (reflectPercent / 100.)));
+					reflectDamage.origin = ORIGIN_REFLECT;
+					g_game.combatChangeHealth(self, attacker, reflectDamage);
+				}
 			}
 		}
 	}
@@ -1072,6 +1282,12 @@ bool Monster::isTarget(const Creature* creature) const
 bool Monster::selectTarget(Creature* creature)
 {
 	if (!isTarget(creature)) {
+		return false;
+	}
+
+	if (isFactionCombatTarget(creature) && !isFactionCombatAllowed()) {
+		removeTarget(creature);
+		updateIdleStatus();
 		return false;
 	}
 
@@ -1174,6 +1390,7 @@ void Monster::onThink(uint32_t interval)
 			setIdle(true);
 		}
 	} else {
+		clearFactionTargetIfNotAllowed();
 		updateIdleStatus();
 
 		if (!isIdle) {
@@ -1290,6 +1507,11 @@ void Monster::doAttacking(uint32_t interval)
 
 	if (ac->isRemoved() || ac->isDead()) {
 		attackedCreature.reset();
+		return;
+	}
+
+	if (isFactionCombatTarget(ac.get()) && !isFactionCombatAllowed()) {
+		clearFactionTargetIfNotAllowed();
 		return;
 	}
 
@@ -1678,6 +1900,7 @@ void Monster::pushItems(Tile* tile)
 	if (TileItemVector* items = tile->getItemList()) {
 		uint32_t moveCount = 0;
 		uint32_t removeCount = 0;
+		std::vector<uint32_t> effectInstances;
 
 		int32_t downItemSize = tile->getDownItemCount();
 		for (int32_t i = downItemSize; --i >= 0;) {
@@ -1686,14 +1909,23 @@ void Monster::pushItems(Tile* tile)
 			    (item->hasProperty(CONST_PROP_BLOCKPATH) || item->hasProperty(CONST_PROP_BLOCKSOLID))) {
 				if (moveCount < 20 && Monster::pushItem(item)) {
 					++moveCount;
-				} else if (g_game.internalRemoveItem(item) == RETURNVALUE_NOERROR) {
+				} else {
+					uint32_t itemInstanceId = item->getInstanceID();
+					if (g_game.internalRemoveItem(item) != RETURNVALUE_NOERROR) {
+						continue;
+					}
+					if (std::find(effectInstances.begin(), effectInstances.end(), itemInstanceId) == effectInstances.end()) {
+						effectInstances.push_back(itemInstanceId);
+					}
 					++removeCount;
 				}
 			}
 		}
 
 		if (removeCount > 0) {
-			g_game.addMagicEffect(tile->getPosition(), CONST_ME_BLOCKHIT);
+			for (uint32_t instanceId : effectInstances) {
+				g_game.addMagicEffect(tile->getPosition(), CONST_ME_BLOCKHIT, instanceId);
+			}
 		}
 	}
 }
@@ -1719,6 +1951,7 @@ void Monster::pushCreatures(Tile* tile)
 	if (CreatureVector* creatures = tile->getCreatures()) {
 		uint32_t removeCount = 0;
 		Monster* lastPushedMonster = nullptr;
+		std::vector<uint32_t> effectInstances;
 
 		for (size_t i = 0; i < creatures->size();) {
 			Monster* monster = creatures->at(i)->getMonster();
@@ -1730,6 +1963,10 @@ void Monster::pushCreatures(Tile* tile)
 
 				monster->changeHealth(-monster->getHealth());
 				monster->setDropLoot(false);
+				uint32_t monsterInstanceId = monster->getInstanceID();
+				if (std::find(effectInstances.begin(), effectInstances.end(), monsterInstanceId) == effectInstances.end()) {
+					effectInstances.push_back(monsterInstanceId);
+				}
 				removeCount++;
 			}
 
@@ -1737,7 +1974,9 @@ void Monster::pushCreatures(Tile* tile)
 		}
 
 		if (removeCount > 0) {
-			g_game.addMagicEffect(tile->getPosition(), CONST_ME_BLOCKHIT);
+			for (uint32_t instanceId : effectInstances) {
+				g_game.addMagicEffect(tile->getPosition(), CONST_ME_BLOCKHIT, instanceId);
+			}
 		}
 	}
 }
@@ -1773,9 +2012,7 @@ bool Monster::getNextStep(Direction& direction, uint32_t& flags)
 					return false;
 				}
 
-				if (ignoreFieldDamage) {
-					ignoreFieldDamage = false;
-				}
+				ignoreFieldDamage = false;
 				// target dancing
 				if (auto ac = attackedCreature.lock(); ac && ac == followCreature.lock()) {
 					if (isFleeing()) {

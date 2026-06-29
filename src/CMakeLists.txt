@@ -6,6 +6,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/baseevents.cpp
 	${CMAKE_CURRENT_LIST_DIR}/bed.cpp
 	${CMAKE_CURRENT_LIST_DIR}/chat.cpp
+	${CMAKE_CURRENT_LIST_DIR}/character_bazaar.cpp
 	${CMAKE_CURRENT_LIST_DIR}/combat.cpp
 	${CMAKE_CURRENT_LIST_DIR}/condition.cpp
 	${CMAKE_CURRENT_LIST_DIR}/configmanager.cpp
@@ -38,6 +39,7 @@ set(tfs_SRC
 	${CMAKE_CURRENT_LIST_DIR}/item.cpp
 	${CMAKE_CURRENT_LIST_DIR}/items.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luaactions.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/luachatchannel.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luacombat.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luacondition.cpp
     ${CMAKE_CURRENT_LIST_DIR}/luacontainer.cpp
@@ -141,6 +143,7 @@ set(tfs_HDR
 	${CMAKE_CURRENT_LIST_DIR}/baseevents.h
 	${CMAKE_CURRENT_LIST_DIR}/bed.h
 	${CMAKE_CURRENT_LIST_DIR}/chat.h
+	${CMAKE_CURRENT_LIST_DIR}/character_bazaar.h
 	${CMAKE_CURRENT_LIST_DIR}/combat.h
 	${CMAKE_CURRENT_LIST_DIR}/condition.h
 	${CMAKE_CURRENT_LIST_DIR}/configmanager.h

@@ -55,6 +55,7 @@ public:
 	void setLossSkill(bool v) { skillLoss = v; }
 
 	bool canDualWield() const { return dualWield; }
+	bool canCleave() const { return cleave; }
 
 	float meleeDamageMultiplier = 1.0f;
 	float distDamageMultiplier = 1.0f;
@@ -101,6 +102,7 @@ private:
 	bool magicShield = false;
 	bool skillLoss = true;
 	bool dualWield = false;
+	bool cleave = false;
 };
 
 using VocationMap = std::map<uint16_t, std::shared_ptr<Vocation>>;

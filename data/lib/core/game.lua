@@ -129,6 +129,32 @@ do
 	end
 end
 
+function Game.getFormattedWorldTime()
+	local worldTime = getWorldTime()
+	local hours = math.floor(worldTime / 60)
+	local minutes = worldTime % 60
+	return string.format("%02d:%02d", hours, minutes)
+end
+
+function Game.checkDuplicateStorageKeys(varName)
+	local keys = _G[varName]
+	local seen = {}
+	local duplicates = {}
+	for k, v in pairs(keys) do
+		if seen[v] then
+			table.insert(duplicates, v)
+		else
+			seen[v] = true
+		end
+	end
+
+	if next(duplicates) == nil then
+		return false
+	else
+		return duplicates
+	end
+end
+
 function Game.saveDebugAssert(playerGuid, assertLine, date, description, comment)
 	db.asyncQuery(
 		"INSERT INTO `player_debugasserts` (`player_id`, `assert_line`, `date`, `description`, `comment`) VALUES(" ..

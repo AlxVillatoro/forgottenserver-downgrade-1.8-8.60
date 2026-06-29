@@ -17,10 +17,13 @@ local RESP_HISTORY = 0x03
 local STORE_ACTION_DELAY = 2
 local MAX_TARGET_NAME_LENGTH = 50
 local MAX_CHARACTER_NAME_LENGTH = 20
+local MAX_HIRELING_NAME_LENGTH = 20
 local MAX_CHARACTER_NAME_WORDS = 5
 local CHANGE_NAME_KICK_DELAY = 3000
 local CHANGE_NAME_SUCCESS_MESSAGE = "Your character name has been changed. You will be disconnected in 3 seconds. Please log in again to use your new name."
 local STORE_HOME_BANNER_DELAY = 10
+local XP_BOOST_PERCENT = 50
+local XP_BOOST_DEFAULT_SECONDS = 3600
 local STORE_HOME_BANNERS = {
 	{image = "/images/store/home/banner_exercisedummies", action = 0, target = 0}
 }
@@ -33,6 +36,93 @@ local lastTransfer = {}
 
 local function supportsCustomNetwork(player)
 	return player and player.isUsingOtClient and player:isUsingOtClient()
+end
+
+local taskBoardOfferTypes = {
+	bounty_kill_boost = true,
+	weekly_kill_boost = true,
+	weekly_reduced_items = true,
+	weekly_task_expansion = true,
+}
+
+local function isTaskBoardOfferType(offerType)
+	return taskBoardOfferTypes[tostring(offerType or ""):lower()] == true
+end
+
+local function isTaskBoardOfferEnabled(offerType)
+	offerType = tostring(offerType or ""):lower()
+	if not configManager.getBoolean(configKeys.TASK_HUNTING_SYSTEM_ENABLED) then
+		return false
+	end
+	if offerType == "bounty_kill_boost" then
+		return configManager.getBoolean(configKeys.BOUNTY_TASKS_ENABLED)
+	end
+	return configManager.getBoolean(configKeys.WEEKLY_TASKS_ENABLED)
+end
+
+local function supportsTaskBoardStore(player, offerType)
+	return player and player.isUsingAstraClient and player:isUsingAstraClient() and
+		isTaskBoardOfferEnabled(offerType)
+end
+
+local function isHirelingOfferType(oftype)
+	oftype = tostring(oftype or ""):lower()
+	return oftype == "hireling" or oftype == "hireling_skill" or oftype == "hireling_outfit"
+end
+
+local function isHirelingCategory(category)
+	local name = tostring(category and category.name or ""):lower()
+	return name == "hirelings" or name == "hireling dresses"
+end
+
+local function isTaskBoardCategory(category)
+	return tostring(category and category.name or ""):lower() == "task hunt"
+end
+
+local function isBattlePassOfferType(offerType)
+	return tostring(offerType or ""):lower() == "battlepass"
+end
+
+local function isXpBoostOfferType(offerType)
+	offerType = tostring(offerType or ""):lower()
+	return offerType == "expboost" or offerType == "xpboost"
+end
+
+local function isBattlePassCategory(category)
+	return tostring(category and category.name or ""):lower() == "battle pass"
+end
+
+local function supportsBattlePassStore(player)
+	return configManager.getBoolean(configKeys.BATTLEPASS_SYSTEM_ENABLED) and
+		player and player.isUsingAstraClient and player:isUsingAstraClient()
+end
+
+local function supportsHirelingStore(player)
+	return configManager.getBoolean(configKeys.HIRELING_SYSTEM_ENABLED) and
+		configManager.getBoolean(configKeys.ASTRA_HIRELING_PROTOCOL_ENABLED) and
+		player and player.isUsingAstraClient and player:isUsingAstraClient()
+end
+
+local function playerOwnsMount(player, mountId)
+	if player.ownsMount then
+		local ok, owned = pcall(function()
+			return player:ownsMount(mountId)
+		end)
+		if ok then
+			return owned == true
+		end
+	end
+
+	if player.hasMount then
+		local ok, owned = pcall(function()
+			return player:hasMount(mountId)
+		end)
+		if ok then
+			return owned == true
+		end
+	end
+
+	return false
 end
 
 local function logInfo(message)
@@ -347,14 +437,39 @@ local function sendStoreCatalog(player)
 		return false
 	end
 
+	local visibleCategories = {}
+	for _, cat in ipairs(storeCategories) do
+		local visibleOffers = {}
+		for _, offer in ipairs(cat.offers) do
+			local taskBoardVisible = not isTaskBoardOfferType(offer.oftype) or
+				supportsTaskBoardStore(player, offer.oftype)
+			local hirelingVisible = not isHirelingOfferType(offer.oftype) or supportsHirelingStore(player)
+			local battlePassVisible = not isBattlePassOfferType(offer.oftype) or supportsBattlePassStore(player)
+			if taskBoardVisible and hirelingVisible and battlePassVisible then
+				visibleOffers[#visibleOffers + 1] = offer
+			end
+		end
+
+		if #visibleOffers > 0 or
+			(not isHirelingCategory(cat) and not isTaskBoardCategory(cat) and not isBattlePassCategory(cat)) then
+			visibleCategories[#visibleCategories + 1] = {
+				name = cat.name,
+				icon = cat.icon,
+				parent = cat.parent,
+				description = cat.description,
+				offers = visibleOffers
+			}
+		end
+	end
+
 	local out = NetworkMessage(player)
 	out:addByte(OPCODE_STORE_SEND)
 	out:addByte(RESP_CATALOG)
 
 	out:addU32(player:getTibiaCoins())
-	out:addU16(#storeCategories)
+	out:addU16(#visibleCategories)
 
-	for _, cat in ipairs(storeCategories) do
+	for _, cat in ipairs(visibleCategories) do
 		out:addString(cat.name)
 		out:addString(cat.icon)
 		out:addString(cat.parent)
@@ -362,11 +477,16 @@ local function sendStoreCatalog(player)
 		out:addU16(#cat.offers)
 
 		for _, offer in ipairs(cat.offers) do
+			local displayId = offer.eid
+			if offer.oftype == "outfit" and player:getSex() == PLAYERSEX_FEMALE and offer.femalevalue > 0 then
+				displayId = offer.femalevalue
+			end
+
 			out:addU32(offer.id)
 			out:addString(offer.name)
 			out:addString(offer.icon)
 			out:addU32(offer.price)
-			out:addU16(offer.eid)
+			out:addU16(displayId)
 			out:addU16(offer.count)
 			out:addString(offer.description)
 			out:addString(offer.oftype)
@@ -385,6 +505,48 @@ local function sendStoreCatalog(player)
 end
 
 local function deliverOffer(player, offer, extra)
+	if isTaskBoardOfferType(offer.oftype) and not supportsTaskBoardStore(player, offer.oftype) then
+		return "This Task Hunt offer is not available."
+	end
+	if isBattlePassOfferType(offer.oftype) and not supportsBattlePassStore(player) then
+		return "Battle Pass system is not available."
+	end
+
+	if offer.oftype == "bounty_kill_boost" then
+		if not TaskBoard.activateTimedBoost(player, TaskBoard.Storage.BOUNTY_KILL_BOOST_UNTIL, offer.value) then
+			return "Failed to activate the bounty kill boost."
+		end
+		return nil
+	end
+
+	if offer.oftype == "weekly_kill_boost" then
+		if not TaskBoard.activateTimedBoost(player, TaskBoard.Storage.WEEKLY_KILL_BOOST_UNTIL, offer.value) then
+			return "Failed to activate the weekly kill boost."
+		end
+		return nil
+	end
+
+	if offer.oftype == "weekly_reduced_items" then
+		if not TaskBoard.activateTimedBoost(player, TaskBoard.Storage.WEEKLY_REDUCED_ITEMS_UNTIL, offer.value) then
+			return "Failed to activate reduced weekly item amounts."
+		end
+		if _TASK_BOARD_WEEKLY_MODULE and _TASK_BOARD_WEEKLY_MODULE.applyReducedItems then
+			_TASK_BOARD_WEEKLY_MODULE.applyReducedItems(player)
+		end
+		return nil
+	end
+
+	if offer.oftype == "weekly_task_expansion" then
+		if player:hasWeeklyExpansion() then
+			return "You already have the Permanent Weekly Task Expansion."
+		end
+		player:setWeeklyExpansion(true)
+		if _TASK_BOARD_WEEKLY_MODULE and _TASK_BOARD_WEEKLY_MODULE.applyExpansion then
+			_TASK_BOARD_WEEKLY_MODULE.applyExpansion(player)
+		end
+		return nil
+	end
+
 	if offer.oftype == "premium" then
 		if offer.value <= 0 then
 			return "Invalid premium amount."
@@ -399,6 +561,21 @@ local function deliverOffer(player, offer, extra)
 		end
 
 		return BattlePassSystem.purchasePremium(player, true)
+	end
+
+	if isXpBoostOfferType(offer.oftype) then
+		if not player.getXpBoostTime or not player.setXpBoostTime or not player.setXpBoostPercent then
+			return "XP Boost is not available."
+		end
+
+		if player:getXpBoostTime() > 0 then
+			return "You already have an active XP boost."
+		end
+
+		local duration = offer.value > 0 and offer.value or XP_BOOST_DEFAULT_SECONDS
+		player:setXpBoostPercent(XP_BOOST_PERCENT)
+		player:setXpBoostTime(math.min(65535, duration))
+		return nil
 	end
 
 	if offer.oftype == "blessing" or offer.oftype == "bless" then
@@ -453,7 +630,7 @@ local function deliverOffer(player, offer, extra)
 	end
 
 	if offer.oftype == "mount" then
-		if player:ownsMount(offer.value) then
+		if playerOwnsMount(player, offer.value) then
 			return "You already have this mount."
 		end
 
@@ -548,6 +725,60 @@ local function deliverOffer(player, offer, extra)
 		return nil
 	end
 
+	if offer.oftype == "hireling" then
+		if not supportsHirelingStore(player) then
+			return "Hireling purchases are only available on AstraClient."
+		end
+
+		if not player.addNewHireling then
+			return "Hireling system is not available."
+		end
+
+		local hireling, err = player:addNewHireling(extra and extra.name or "", extra and extra.sex or HIRELING_SEX.MALE)
+		if not hireling then
+			return err or "Failed to create hireling."
+		end
+
+		player:sendTextMessage(MESSAGE_STATUS_SMALL, "Your hireling lamp was sent to your Store Inbox.")
+		return nil
+	end
+
+	if offer.oftype == "hireling_skill" then
+		if not supportsHirelingStore(player) then
+			return "Hireling purchases are only available on AstraClient."
+		end
+
+		local skillName = GetHirelingSkillNameById(offer.value > 0 and offer.value or offer.eid)
+		if not skillName then
+			return "Invalid hireling skill."
+		end
+
+		if player:hasHirelingSkill(skillName) then
+			return "You already have this hireling skill."
+		end
+
+		player:enableHirelingSkill(skillName)
+		return nil
+	end
+
+	if offer.oftype == "hireling_outfit" then
+		if not supportsHirelingStore(player) then
+			return "Hireling purchases are only available on AstraClient."
+		end
+
+		local outfitName = GetHirelingOutfitNameById(offer.value > 0 and offer.value or offer.eid)
+		if not outfitName then
+			return "Invalid hireling dress."
+		end
+
+		if player:hasHirelingOutfit(outfitName) then
+			return "You already have this hireling dress."
+		end
+
+		player:enableHirelingOutfit(outfitName)
+		return nil
+	end
+
 	return "Invalid offer type."
 end
 
@@ -599,12 +830,36 @@ function buyHandler.onReceive(player, msg)
 		sendStoreError(player, "Offer not found.")
 		return
 	end
+	if isTaskBoardOfferType(offer.oftype) and not supportsTaskBoardStore(player, offer.oftype) then
+		sendStoreError(player, "This Task Hunt offer is not available.")
+		return
+	end
+	if isHirelingOfferType(offer.oftype) and not supportsHirelingStore(player) then
+		sendStoreError(player, "The hireling system is not available.")
+		return
+	end
+	if isBattlePassOfferType(offer.oftype) and not supportsBattlePassStore(player) then
+		sendStoreError(player, "Battle Pass system is not available.")
+		return
+	end
 
 	local extra = {}
 	if offer.oftype == "changename" then
 		extra.name = NetworkGuard.readString(msg, MAX_CHARACTER_NAME_LENGTH)
 		if not extra.name then
 			sendStoreError(player, "You need to choose a new character name.")
+			return
+		end
+	elseif offer.oftype == "hireling" then
+		extra.name = NetworkGuard.readString(msg, MAX_HIRELING_NAME_LENGTH)
+		if not extra.name then
+			sendStoreError(player, "You need to choose a hireling name.")
+			return
+		end
+
+		extra.sex = NetworkGuard.readByte(msg)
+		if extra.sex == nil then
+			sendStoreError(player, "You need to choose a hireling sex.")
 			return
 		end
 	end
@@ -626,7 +881,10 @@ function buyHandler.onReceive(player, msg)
 	local historyCount = offer.oftype == "item" and offer.count or (offer.oftype == "prey_wildcard" and offer.value or 1)
 	addStoreHistory(player:getAccountId(), player:getGuid(), offer.name, -offer.price, historyCount, nil)
 
-	if offer.oftype == "changename" then
+	if isXpBoostOfferType(offer.oftype) then
+		player:sendStats()
+		sendStoreSuccess(player, offerId, "Your XP Boost is now active.")
+	elseif offer.oftype == "changename" then
 		sendStoreSuccess(player, offerId, CHANGE_NAME_SUCCESS_MESSAGE)
 		scheduleChangeNameKick(player)
 	else

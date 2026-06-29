@@ -17,6 +17,7 @@ local RESP_BESTIARY_DATA = 0x01
 local RESP_BESTIARY_OVERVIEW = 0x02
 local RESP_BESTIARY_MONSTER = 0x03
 local RESP_TRACKER = 0x05
+local RESP_BESTIARY_PROGRESS = 0x06
 
 local MAX_TRACKER_SLOTS = 5
 local CHARM_REMOVE_COST = 10000
@@ -216,6 +217,54 @@ rebuildEarnedPoints = function(playerGuid, kills)
 	finishedCache[playerGuid] = finished
 end
 
+local function updateKillCache(playerGuid, raceId, amount)
+	playerGuid = tonumber(playerGuid) or 0
+	raceId = tonumber(raceId) or 0
+	amount = tonumber(amount) or 0
+	if playerGuid <= 0 or raceId <= 0 or amount == 0 then
+		return false
+	end
+
+	local kills = killCache[playerGuid]
+	if not kills then
+		earnedPointsCache[playerGuid] = nil
+		finishedCache[playerGuid] = nil
+		return false
+	end
+
+	kills[raceId] = math.max(0, (kills[raceId] or 0) + amount)
+	rebuildEarnedPoints(playerGuid, kills)
+	return true
+end
+
+local function getKillCount(playerGuid, raceId)
+	playerGuid = tonumber(playerGuid) or 0
+	raceId = tonumber(raceId) or 0
+	if playerGuid <= 0 or raceId <= 0 then
+		return 0
+	end
+
+	local kills = loadKillMap(playerGuid)
+	return kills[raceId] or 0
+end
+
+local function preloadPlayer(playerGuid)
+	playerGuid = tonumber(playerGuid) or 0
+	if playerGuid <= 0 then
+		return false
+	end
+
+	loadKillMap(playerGuid)
+	loadTrackerList(playerGuid)
+	return true
+end
+
+if CustomBestiary then
+	CustomBestiary.updateKillCache = updateKillCache
+	CustomBestiary.getKillCount = getKillCount
+	CustomBestiary.preloadPlayer = preloadPlayer
+end
+
 local function getSpentCharmPoints(charms)
 	local spent = 0
 	for charmId, state in pairs(charms) do
@@ -394,11 +443,12 @@ local function sendBestiaryOverviewEntries(player, title, entries)
 		local progress = CustomBestiary.getProgress(entry, kills[entry.raceId] or 0)
 		out:addU16(entry.raceId)
 		if progress <= 0 then
-			-- Astra paints undiscovered creatures with the black outfit shader.
+			-- Astra still paints undiscovered creatures as "?" with the black
+			-- outfit shader, but it needs the real creature info cached so a
+			-- later unlock/progress event can resolve the race id and reveal it.
 			out:addByte(1)
 			out:addByte(0)
-			local masked = { name = "?", outfit = entry.outfit }
-			writeCreatureInfo(out, masked)
+			writeCreatureInfo(out, entry)
 		else
 			out:addByte(math.min(progress + 1, 0xFF))
 			out:addByte(math.min(progress, 0xFF))
@@ -509,12 +559,34 @@ local function sendBestiaryMonster(player, raceId)
 end
 
 local function sendBestiaryProgress(player, raceId, killCount)
-	local entry = CustomBestiary.getMonster(raceId)
-	if not entry then
-		return
+	if not supportsCustomNetwork(player) then
+		return false
 	end
 
-	sendBestiaryOverview(player, entry.class)
+	local entry = CustomBestiary.getMonster(raceId)
+	if not entry then
+		return false
+	end
+
+	local playerGuid = getPlayerGuid(player)
+	local kills = loadKillMap(playerGuid)
+	local charms = loadCharmMap(playerGuid)
+	killCount = tonumber(killCount) or kills[entry.raceId] or 0
+	local progress = CustomBestiary.getProgress(entry, killCount)
+
+	local out = NetworkMessage(player)
+	out:addByte(OPCODE_CYCLOPEDIA_SEND)
+	out:addByte(RESP_BESTIARY_PROGRESS)
+	out:addU16(entry.raceId)
+	out:addByte(clamp(progress, 0, 0xFF))
+	out:addU32(clamp(killCount, 0, 0xFFFFFFFF))
+	out:addU16(entry.firstUnlock)
+	out:addU16(entry.secondUnlock)
+	out:addU16(entry.toKill)
+	writeCreatureInfo(out, entry)
+	out:addU32(clamp(getStoredCharmBalance(playerGuid, kills, charms), 0, 0xFFFFFFFF))
+	out:addU32(clamp(getGoldBalance(player), 0, 0xFFFFFFFF))
+	return out:sendToPlayer(player)
 end
 
 local function sendTracker(player)
@@ -559,7 +631,28 @@ local function sendTracker(player)
 	return out:sendToPlayer(player)
 end
 
+local function sendTrackerIfTracked(player, raceId)
+	if not supportsCustomNetwork(player) then
+		return false
+	end
+
+	raceId = tonumber(raceId) or 0
+	if raceId <= 0 then
+		return false
+	end
+
+	local tracker = loadTrackerList(getPlayerGuid(player))
+	for _, trackedRaceId in ipairs(tracker) do
+		if trackedRaceId == raceId then
+			return sendTracker(player)
+		end
+	end
+
+	return false
+end
+
 CustomBestiary.sendTracker = sendTracker
+CustomBestiary.sendTrackerIfTracked = sendTrackerIfTracked
 CustomBestiary.sendProgress = sendBestiaryProgress
 
 local function toggleTracker(player, raceId)
@@ -767,6 +860,9 @@ bestiaryLogout:register()
 
 local bestiaryLogin = CreatureEvent("CustomBestiaryLogin")
 function bestiaryLogin.onLogin(player)
+	if CustomBestiary and CustomBestiary.preloadPlayer then
+		CustomBestiary.preloadPlayer(player:getGuid())
+	end
 	player:registerEvent("CustomBestiaryLogout")
 	return true
 end

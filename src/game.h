@@ -150,6 +150,7 @@ public:
 	 * \returns A Creature pointer to the creature
 	 */
 	[[nodiscard]] Creature* getCreatureByID(uint32_t id);
+	[[nodiscard]] std::shared_ptr<Creature> getCreatureByIDShared(uint32_t id) const;
 
 	/**
 	 * Returns a monster based on the unique creature identifier
@@ -157,6 +158,7 @@ public:
 	 * \returns A Monster pointer to the monster
 	 */
 	[[nodiscard]] Monster* getMonsterByID(uint32_t id);
+	[[nodiscard]] std::shared_ptr<Monster> getMonsterByIDShared(uint32_t id) const;
 
 	/**
 	 * Returns an npc based on the unique creature identifier
@@ -164,6 +166,7 @@ public:
 	 * \returns A NPC pointer to the npc
 	 */
 	[[nodiscard]] Npc* getNpcByID(uint32_t id);
+	[[nodiscard]] std::shared_ptr<Npc> getNpcByIDShared(uint32_t id) const;
 
 	/**
 	 * Returns a player based on the unique creature identifier
@@ -334,6 +337,12 @@ public:
 	Item* transformItem(Item* item, uint16_t newId, int32_t newCount = -1);
 
 	/**
+	 * Re-sends an item after one of its runtime attributes changes without a
+	 * transform (for example, charges or duration changed from Lua).
+	 */
+	void refreshItem(Item* item);
+
+	/**
 	 * Teleports an object to another position
 	 * \param thing is the object to teleport
 	 * \param newPos is the new position
@@ -358,7 +367,8 @@ public:
 	 * \param text The text to say
 	 */
 	bool internalCreatureSay(Creature* creature, SpeakClasses type, std::string_view text, bool ghostMode,
-	                         SpectatorVec* spectatorsPtr = nullptr, const Position* pos = nullptr, bool echo = false);
+	                         SpectatorVec* spectatorsPtr = nullptr, const Position* pos = nullptr, bool echo = false,
+	                         bool emoteSpell = false);
 
 	void loadPlayersRecord();
 	void checkPlayersRecord();
@@ -379,6 +389,7 @@ public:
 	// Implementation of player invoked events
 	void playerMoveThing(uint32_t playerId, const Position& fromPos, uint16_t spriteId, uint8_t fromStackPos,
 	                     const Position& toPos, uint8_t count);
+	void playerEquipItem(uint32_t playerId, uint16_t itemId, bool hasTier = false, uint8_t tier = 0);
 	void playerMoveCreatureByID(uint32_t playerId, uint32_t movingCreatureId, const Position& movingCreatureOrigPos,
 	                            const Position& toPos);
 	void playerMoveCreature(Player* player, Creature* movingCreature, const Position& movingCreatureOrigPos,
@@ -402,6 +413,10 @@ public:
 	void playerUseItemEx(uint32_t playerId, const Position& fromPos, uint8_t fromStackPos, uint16_t fromSpriteId,
 	                     const Position& toPos, uint8_t toStackPos, uint16_t toSpriteId);
 	void playerUseItem(uint32_t playerId, const Position& pos, uint8_t stackPos, uint8_t index, uint16_t spriteId);
+	void playerInspectItem(uint32_t playerId, const Position& pos);
+	void playerInspectItem(uint32_t playerId, uint16_t itemId, uint8_t itemCount, uint8_t inspectionType);
+	void playerSetMonsterPodium(uint32_t playerId, uint32_t raceId, const Position& pos, uint8_t stackPos,
+	                            uint16_t itemId, uint8_t direction, bool podiumVisible, bool creatureVisible);
 	void playerUseWithCreature(uint32_t playerId, const Position& fromPos, uint8_t fromStackPos, uint32_t creatureId,
 	                           uint16_t spriteId);
 	void playerQuickLoot(uint32_t playerId, const Position& pos, uint16_t itemId, uint8_t stackPos,
@@ -498,6 +513,8 @@ public:
 	void combatGetTypeInfo(CombatType_t combatType, Creature* target, TextColor_t& color, uint8_t& effect);
 
 	bool combatChangeHealth(Creature* attacker, Creature* target, CombatDamage& damage);
+	bool combatChangeHealth(const std::shared_ptr<Creature>& attacker, const std::shared_ptr<Creature>& target,
+	                        CombatDamage& damage);
 	bool combatChangeMana(Creature* attacker, Creature* target, CombatDamage& damage);
 	void applyResetSystemBonuses(CombatDamage& damage, Player* attackerPlayer, Player* targetPlayer);
 

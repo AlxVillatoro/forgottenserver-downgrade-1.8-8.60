@@ -178,7 +178,12 @@ if NpcHandler == nil then
     end
 
     function NpcHandler:getFocus()
-        return self:getNpcState().focuses[1]
+        for _, focus in pairs(self:getNpcState().focuses) do
+            if focus then
+                return focus
+            end
+        end
+        return nil
     end
 
     -- Function used to change the focus of this npc.
@@ -186,7 +191,11 @@ if NpcHandler == nil then
         if self:isFocused(newFocus) then return end
 
         local focuses = self:getNpcState().focuses
-        focuses[#focuses + 1] = newFocus
+        local position = 1
+        while focuses[position] do
+            position = position + 1
+        end
+        focuses[position] = newFocus
         self:getNpcState().topic[newFocus] = 0
         local callback = self:getCallback(CALLBACK_ONADDFOCUS)
         if callback == nil or callback(newFocus) then
@@ -372,7 +381,7 @@ if NpcHandler == nil then
                 local msg = self:getMessage(MESSAGE_FAREWELL)
                 local player = Player(cid)
                 local playerName = player and player:getName() or -1
-                local parseInfo = {[TAG_PLAYERNAME] = playerName}
+                local parseInfo = {[TAG_PLAYERNAME] = playerName, ["|TIME|"] = Game.getFormattedWorldTime()}
                 self:resetNpc(cid)
                 msg = self:parseMessage(msg, parseInfo)
                 self:say(msg, cid, true)
@@ -390,7 +399,7 @@ if NpcHandler == nil then
                     local msg = self:getMessage(MESSAGE_GREET)
                     local player = Player(cid)
                     local playerName = player and player:getName() or -1
-                    local parseInfo = {[TAG_PLAYERNAME] = playerName}
+                    local parseInfo = {[TAG_PLAYERNAME] = playerName, ["|TIME|"] = Game.getFormattedWorldTime()}
                     msg = self:parseMessage(msg, parseInfo)
                     self:say(msg, cid, true)
                 else
@@ -440,10 +449,6 @@ if NpcHandler == nil then
         local cid = creature:getId()
         if not self:isConversationMessage(msgtype) then return false end
 
-        local isFocused = self:isFocused(cid)
-        local currentFocus = self:getFocus()
-        if currentFocus and not isFocused then return false end
-
         local callback = self:getCallback(CALLBACK_CREATURE_SAY)
         if callback == nil or callback(cid, msgtype, msg) then
             if self:processModuleCallback(CALLBACK_CREATURE_SAY, cid, msgtype,
@@ -451,17 +456,15 @@ if NpcHandler == nil then
                 if not self:isInRange(cid) then return end
 
                 if self.keywordHandler then
-                    if isFocused or not currentFocus then
-                        local ret = self.keywordHandler:processMessage(cid, msg)
-                        if not ret then
-                            local callback = self:getCallback(
-                                                 CALLBACK_MESSAGE_DEFAULT)
-                            if callback and callback(cid, msgtype, msg) then
-                                self.talkStart[cid] = os.time()
-                            end
-                        else
+                    local ret = self.keywordHandler:processMessage(cid, msg)
+                    if not ret then
+                        local callback = self:getCallback(
+                                             CALLBACK_MESSAGE_DEFAULT)
+                        if callback and callback(cid, msgtype, msg) then
                             self.talkStart[cid] = os.time()
                         end
+                    else
+                        self.talkStart[cid] = os.time()
                     end
                 end
             end
@@ -477,7 +480,7 @@ if NpcHandler == nil then
                 if self:isFocused(cid) then
                     local player = Player(cid)
                     local playerName = player and player:getName() or -1
-                    local parseInfo = {[TAG_PLAYERNAME] = playerName}
+                    local parseInfo = {[TAG_PLAYERNAME] = playerName, ["|TIME|"] = Game.getFormattedWorldTime()}
                     local msg = self:parseMessage(self:getMessage(
                                                       MESSAGE_ONCLOSESHOP),
                                                   parseInfo)
@@ -599,7 +602,7 @@ if NpcHandler == nil then
                         local playerName = player:getName()
                         local playerSex = player:getSex()
 
-                        local parseInfo = {[TAG_PLAYERNAME] = playerName}
+                        local parseInfo = {[TAG_PLAYERNAME] = playerName, ["|TIME|"] = Game.getFormattedWorldTime()}
                         local message = self:parseMessage(msg, parseInfo)
 
                         local msg_male = self:getMessage(MESSAGE_WALKAWAY_MALE)
@@ -609,12 +612,12 @@ if NpcHandler == nil then
                             self:parseMessage(msg_female, parseInfo)
                         if message_female ~= message_male then
                             if playerSex == PLAYERSEX_FEMALE then
-                                selfSay(message_female)
+                                selfSay(message_female, cid)
                             else
-                                selfSay(message_male)
+                                selfSay(message_male, cid)
                             end
                         elseif message ~= "" then
-                            selfSay(message)
+                            selfSay(message, cid)
                         end
                     end
                     self:resetNpc(cid)

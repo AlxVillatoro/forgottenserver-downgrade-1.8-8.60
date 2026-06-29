@@ -44,7 +44,7 @@ if Modules == nil then
             (parameters.onlyFocus == nil or parameters.onlyFocus == true)
         if not npcHandler:isFocused(cid) and onlyFocus then return false end
 
-        local parseInfo = {[TAG_PLAYERNAME] = Player(cid):getName()}
+        local parseInfo = {[TAG_PLAYERNAME] = Player(cid):getName(), ["|TIME|"] = Game.getFormattedWorldTime()}
         npcHandler:say(npcHandler:parseMessage(parameters.text or
                                                    parameters.message, parseInfo),
                        cid, parameters.publicize and true)
@@ -501,7 +501,7 @@ if Modules == nil then
         if not module.npcHandler:isFocused(cid) or shop_npcuid[cid] ~=
             getNpcCid() then return false end
         local parentParameters = node:getParent():getParameters()
-        local parseInfo = {[TAG_PLAYERNAME] = Player(cid):getName()}
+        local parseInfo = {[TAG_PLAYERNAME] = Player(cid):getName(), ["|TIME|"] = Game.getFormattedWorldTime()}
         local msg = module.npcHandler:parseMessage(
                         module.npcHandler:getMessage(MESSAGE_DECLINE), parseInfo)
         module.npcHandler:say(msg, cid)

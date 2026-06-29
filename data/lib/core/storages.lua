@@ -25,10 +25,20 @@ PlayerStorageKeys = {
     guildLeaderChatCooldown = 50001,
     expColor = 50100,
     healthDisplay = 50101,
+    emoteSpells = 50102,
+    taskBoardBountyKillBoostUntil = 50200,
+    taskBoardWeeklyKillBoostUntil = 50201,
+    taskBoardWeeklyReducedItemsUntil = 50202,
     dailyRewardLastDay = 90720,
     dailyRewardIndex = 90721,
     dailyRewardStreak = 90722,
     dailyRewardJokerTokens = 90723,
+
+    -- Battle Pass
+    -- The detailed state is persisted in player KV under the "battlepass" scope.
+    -- These numeric storages are intentionally reserved for timers/version markers.
+    battlePassSeasonEpoch = 90730,
+    battlePassDoubleSkillUntil = 90731,
 
     -- Forge system
     forgeDust = 10000,
@@ -51,12 +61,15 @@ PlayerStorageKeys = {
 
 STORAGE_EXP_COLOR = PlayerStorageKeys.expColor
 STORAGE_HEALTH_DISPLAY = PlayerStorageKeys.healthDisplay
+STORAGE_EMOTE_SPELLS = PlayerStorageKeys.emoteSpells
 
 GlobalStorageKeys = {
     workbench = 30050,
     workbenchOwner = 30051,
     boostedCreatureIndex = 90001,
     boostedCreatureDay = 90002,
+    battlePassSeasonEpoch = 90500,
+    battlePassSeasonStartedAt = 90501,
 }
 
 AccountStorageKeys = {}

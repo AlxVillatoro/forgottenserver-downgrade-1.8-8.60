@@ -222,6 +222,14 @@ enum MagicEffectClasses : uint16_t
 	CONST_ME_SMALLWHITE_ENERGY_SPARK = 301,
 	CONST_ME_SMALLGREEN_ENERGY_SPARK = 302,
 	CONST_ME_SMALLPINK_ENERGY_SPARK = 303,
+
+	// 15.12 - Weapon Attack Effects
+	CONST_ME_SWORD_ATTACK = 304,
+	CONST_ME_CLUB_ATTACK = 305,
+	CONST_ME_AXE_ATTACK = 306,
+	CONST_ME_MONK_STAFF_ATTACK = 307,
+	CONST_ME_MONK_DAGGERS_ATTACK = 308,
+	CONST_ME_FIST_ATTACK = 309,
 };
 
 enum ShootType_t : uint16_t
@@ -546,6 +554,7 @@ enum CreatureIconQuests_t : uint8_t
 	CreatureIconQuests_Hazard,
 	CreatureIconQuests_BrownSkull,
 	CreatureIconQuests_BloodDrop,
+	CreatureIconQuests_Familiar,
 };
 
 struct CreatureIcon
@@ -653,7 +662,18 @@ enum GuildEmblems_t : uint8_t
 	GUILDEMBLEM_NONE = 0,
 	GUILDEMBLEM_ALLY = 1,
 	GUILDEMBLEM_ENEMY = 2,
-	GUILDEMBLEM_NEUTRAL = 3
+	GUILDEMBLEM_NEUTRAL = 3,
+	GUILDEMBLEM_MEMBER = 4,
+	GUILDEMBLEM_OTHER = 5
+};
+
+enum InspectObjectTypes_t : uint8_t
+{
+	INSPECT_NORMALOBJECT = 0,
+	INSPECT_NPCTRADE = 1,
+	INSPECT_PLAYERTRADE = 2,
+	INSPECT_CYCLOPEDIA = 3,
+	INSPECT_PROFICIENCY = 4
 };
 
 enum item_t : uint16_t
@@ -722,6 +742,27 @@ enum item_t : uint16_t
 	ITEM_DOCUMENT_RO = 2834, // read-only
 	ITEM_RECEIPT_SUCCESS = 21932,
 	ITEM_RECEIPT_FAIL = 21933,
+
+	// Staff weapons
+	ITEM_BAMBO_JO = 50270,
+	ITEM_COBRA_BO = 50167,
+	ITEM_DRACHAKU = 10391,
+	ITEM_JO_STAFF = 50171,
+	ITEM_LIGHT_JO_STAFF = 50166,
+	ITEM_NUNCHAKU_OF_DESTRUCTION = 50168,
+	ITEM_NUNCHAKU_OF_ENLIGHTENMENT = 50273,
+	ITEM_SIMPLE_JO_STAFF = 51119,
+	// Daggers weapons
+	ITEM_AMBER_KUSARIGAMA = 50239,
+	ITEM_CRUDE_UMBRAL_KATAR = 50163,
+	ITEM_FALCON_SAI = 50161,
+	ITEM_NAGA_KATAR = 50160,
+	ITEM_SAI_OF_ENLIGHTENMENT = 50272,
+	ITEM_SAI = 50183,
+	ITEM_SOULKAMAS = 50159,
+	ITEM_TRADITIONAL_SAI = 10389,
+	ITEM_UMBRAL_KATAR = 50164,
+	ITEM_MASTER_UMBRAL_KATAR = 50165,
 };
 
 enum AvatarLookType_t : uint16_t
@@ -929,11 +970,18 @@ enum class GameFeature : uint8_t {
 	PacketCompression = 111,
 
 	QuickLootFlags = 123,
+	DisplayItemDuration = 129,
 	ThingUpgradeClassification = 130,
 	ItemTierByte = 131,
 	AstraCreatureIcons = 133,
+	PlayerFamiliars = 138,
+	DisplayItemCharges = 139,
+	PackedPlayerInventory = 140,
+	AstraQuiverCountU16 = 141,
+	AstraOutfitStoreMode = 142,
+	AstraItemMetadata = 143,
 
-	Last = 133
+	Last = 143
 };
 
 inline constexpr int32_t CHANNEL_GUILD = 0x00;

@@ -610,6 +610,19 @@ class ProtocolSpectator {
                 o->sendOutfitWindow();
         }
 
+        void sendItemInspection(std::shared_ptr<Item> item = nullptr, uint16_t itemId = 0, uint8_t itemCount = 1,
+                                uint8_t inspectionType = INSPECT_NORMALOBJECT) {
+            auto o = owner.lock();
+            if (o)
+                o->sendItemInspection(item, itemId, itemCount, inspectionType);
+        }
+
+        void sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos) {
+            auto o = owner.lock();
+            if (o)
+                o->sendMonsterPodiumWindow(podium, position, itemId, stackPos);
+        }
+
         void sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus) {
             auto o = owner.lock();
             if (o)
@@ -1008,6 +1021,7 @@ class ProtocolSpectator {
         bool isMehah = false;
 	    bool isOTC = false;
         bool isAstraClient = false;
+        bool isFonticakClient = false;
         std::string cast_password = "";
         std::string cast_description = "";
 

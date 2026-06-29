@@ -86,8 +86,12 @@ bool ScriptingManager::loadScriptSystems()
 		}
 	}
 
-	if (g_luaEnvironment.loadFile("data/global.lua") == -1) {
-		LOG_WARN("[Warning - ScriptingManager::loadScriptSystems] Can not load " "data/global.lua");
+	if (g_luaEnvironment.loadFile("data/lib/lib.lua") == -1) {
+		LOG_WARN("[Warning - ScriptingManager::loadScriptSystems] Can not load " "data/lib/lib.lua");
+	}
+
+	if (g_luaEnvironment.loadFile("data/anti_advertising.lua") == -1) {
+		LOG_WARN("[Warning - ScriptingManager::loadScriptSystems] Can not load " "data/anti_advertising.lua");
 	}
 
 #if defined(LUAJIT_VERSION)

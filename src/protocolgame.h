@@ -14,6 +14,7 @@ class Player;
 class Game;
 class House;
 class Container;
+class Item;
 class Tile;
 class Connection;
 class ProtocolGame;
@@ -27,11 +28,11 @@ struct TextMessage
 	MessageClasses type = MESSAGE_STATUS_DEFAULT;
 	std::string text;
 	Position position;
-	uint16_t channelId;
+	uint16_t channelId = 0;
 	struct
 	{
 		int32_t value = 0;
-		TextColor_t color;
+		TextColor_t color = TEXTCOLOR_NONE;
 	} primary, secondary;
 
 	TextMessage() = default;
@@ -67,6 +68,8 @@ public:
 	void logout(bool displayEffect, bool forced);
 
 	uint16_t getVersion() const { return version; }
+	bool canSendAstraItemState() const;
+	bool shouldSendAstraQuiverCountU16() const;
 
 	static uint32_t spectatorId;
 	static std::set<std::string> spectatorNames;
@@ -96,6 +99,8 @@ private:
 	// Parse methods
 	void parseAutoWalk(NetworkMessage& msg);
 	void parseSetOutfit(NetworkMessage& msg);
+	void parseInspectionObject(NetworkMessage& msg);
+	void parseSetMonsterPodium(NetworkMessage& msg);
 	void parseSay(NetworkMessage& msg);
 	void parseLookAt(NetworkMessage& msg);
 	void parseLookInBattleList(NetworkMessage& msg);
@@ -106,6 +111,7 @@ private:
 	void parseRuleViolationReport(NetworkMessage& msg);
 
 	void parseThrow(NetworkMessage& msg);
+	void parseHotkeyEquip(NetworkMessage& msg);
 	void parseUseItemEx(NetworkMessage& msg);
 	void parseUseWithCreature(NetworkMessage& msg);
 	void parseUseItem(NetworkMessage& msg);
@@ -130,6 +136,7 @@ private:
 
 	void parseModalWindowAnswer(NetworkMessage& msg);
 	void parseImbuementDurations(NetworkMessage& msg);
+	void parseCharacterBazaar(NetworkMessage& msg);
 
 	// trade methods
 	void parseRequestTrade(NetworkMessage& msg);
@@ -199,6 +206,9 @@ private:
 	void sendTextWindow(uint32_t windowTextId, uint16_t itemId, std::string_view text);
 	void sendHouseWindow(uint32_t windowTextId, std::string_view text);
 	void sendOutfitWindow();
+	void sendItemInspection(std::shared_ptr<Item> item = nullptr, uint16_t itemId = 0, uint8_t itemCount = 1,
+	                        uint8_t inspectionType = INSPECT_NORMALOBJECT);
+	void sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos);
 
 	void sendUpdatedVIPStatus(uint32_t guid, VipStatus_t newStatus);
 	void sendVIP(uint32_t guid, std::string_view name, VipStatus_t status);
@@ -244,6 +254,7 @@ private:
 
 	// inventory
 	void sendInventoryItem(slots_t slot, const Item* item);
+	void sendPlayerInventory();
 	void sendImbuementDurations(slots_t updatedSlot = CONST_SLOT_WHEREEVER, const Item* updatedItem = nullptr);
 
 	// messages
@@ -291,6 +302,9 @@ private:
 	// OTCv8
 	void sendFeatures();
 	bool shouldSendQuickLootFlags() const;
+	bool shouldSendItemTierByte() const;
+	bool shouldSendThingUpgradeClassification() const;
+	bool shouldSendItemTierData() const;
 	void sendNewPing(uint32_t pingId);
 	void parseNewPing(NetworkMessage& msg);
 
@@ -350,6 +364,8 @@ private:
 	bool isMehah = false;
 	bool isOTC = false;
 	bool isAstraClient = false;
+	bool isFonticakClient = false;
+	bool isUsingFonticakClient() const { return isFonticakClient; }
 	bool supportsAstraCreatureIcons() const { return isAstraClient; }
 	bool helperCastOnFootNextSay = false;
 	OperatingSystem_t clientOperatingSystem = CLIENTOS_NONE;

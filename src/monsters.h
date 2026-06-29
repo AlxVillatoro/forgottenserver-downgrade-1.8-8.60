@@ -101,6 +101,8 @@ class MonsterType
 		ObserverPtr<LuaScriptInterface> scriptInterface;
 
 		std::map<CombatType_t, int32_t> elementMap;
+		std::map<CombatType_t, int32_t> reflectMap;
+		std::map<CombatType_t, int32_t> healingMap;
 
 		std::vector<voiceBlock_t> voiceVector;
 
@@ -124,9 +126,10 @@ class MonsterType
 		uint32_t yellChance = 0;
 		uint32_t yellSpeedTicks = 0;
 		uint32_t staticAttackChance = 95;
+		uint16_t critChance = 0;
 		uint32_t maxSummons = 0;
 		uint32_t changeTargetSpeed = 0;
-		uint32_t conditionImmunities = 0;
+		uint64_t conditionImmunities = 0;
 		uint32_t damageImmunities = 0;
 		uint32_t baseSpeed = 200;
 
@@ -183,9 +186,9 @@ public:
 
 	std::string name;
 	std::string nameDescription;
-	uint32_t raceId;
+	uint32_t raceId = 0;
 
-	MonsterInfo info;
+	MonsterInfo info{};
 
 	void loadLoot(MonsterType* monsterType, LootBlock lootBlock);
 };

@@ -22,7 +22,10 @@
 #include "town.h"
 #include "vocation.h"
 #include "weapon_proficiency.h"
+#include "kv/kv.h"
+#include <algorithm>
 #include <array>
+#include <limits>
 #include <vector>
 
 #include <unordered_map>
@@ -45,6 +48,7 @@ class Party;
 class SchedulerTask;
 class Bed;
 class Guild;
+class KV;
 
 enum skillsid_t
 {
@@ -150,6 +154,7 @@ public:
 
 	Player* getPlayer() override { return this; }
 	const Player* getPlayer() const override { return this; }
+	Faction_t getFaction() const override { return FACTION_PLAYER; }
 
 	void setID() override
 	{
@@ -282,6 +287,25 @@ public:
 	void setPreyDamageReduction(std::string monsterName, uint16_t value);
 	uint16_t getPreyDamageBoost(std::string_view monsterName) const;
 	uint16_t getPreyDamageReduction(std::string_view monsterName) const;
+
+	// Task Hunting / Bounty / Weekly / Soulseals
+	uint64_t getTaskHuntingPoints() const { return taskHuntingPoints; }
+	void setTaskHuntingPoints(uint64_t points) { taskHuntingPoints = points; }
+	void addTaskHuntingPoints(uint64_t points);
+	[[nodiscard]] bool removeTaskHuntingPoints(uint64_t points);
+
+	uint64_t getBountyPoints() const { return bountyPoints; }
+	void setBountyPoints(uint64_t points) { bountyPoints = points; }
+	void addBountyPoints(uint64_t points);
+	[[nodiscard]] bool removeBountyPoints(uint64_t points);
+
+	uint64_t getSoulsealsPoints() const { return soulsealsPoints; }
+	void setSoulsealsPoints(uint64_t points) { soulsealsPoints = points; }
+	void addSoulsealsPoints(uint64_t points);
+	[[nodiscard]] bool removeSoulsealsPoints(uint64_t points);
+
+	bool hasWeeklyExpansion() const { return m_hasWeeklyExpansion; }
+	void setWeeklyExpansion(bool has) { m_hasWeeklyExpansion = has; }
 	float getResetDefenseBonus() const {
 		return resetDefenseBonus;
 	}
@@ -343,7 +367,7 @@ public:
 	void removePartyInvitation(Party* party);
 	void clearPartyInvitations();
 
-	GuildEmblems_t getGuildEmblem(const Player* player) const;
+	GuildEmblems_t getGuildEmblem(const Player* player, bool useGuildMembershipEmblems = false) const;
 	void reloadWarList(bool updateVisuals = true);
 
 	uint64_t getSpentMana() const { return manaSpent; }
@@ -479,6 +503,21 @@ public:
 		return std::max<int32_t>(0, base);
 	}
 	int32_t getExperienceRate(ExperienceRateType type) const { return experienceRate[static_cast<size_t>(type)]; }
+	uint16_t getBaseXpGain() const
+	{
+		return static_cast<uint16_t>(std::clamp<int32_t>(getExperienceRate(ExperienceRateType::BASE), 0, std::numeric_limits<uint16_t>::max()));
+	}
+	uint16_t getDisplayGrindingXpBoost() const
+	{
+		return static_cast<uint16_t>(std::clamp<int32_t>(getExperienceRate(ExperienceRateType::LOW_LEVEL) - 100, 0, std::numeric_limits<uint16_t>::max()));
+	}
+	uint16_t getXpBoostPercent() const { return xpBoostPercent; }
+	uint16_t getDisplayXpBoostPercent() const { return xpBoostTime > 0 ? xpBoostPercent : 0; }
+	uint16_t getStaminaXpBoost() const
+	{
+		return static_cast<uint16_t>(std::clamp<int32_t>(getExperienceRate(ExperienceRateType::STAMINA), 0, std::numeric_limits<uint16_t>::max()));
+	}
+	uint16_t getXpBoostTime() const { return xpBoostTime; }
 	uint32_t getBaseMagicLevel() const { return magLevel; }
 	uint8_t getMagicLevelPercent() const { return magLevelPercent; }
 	uint8_t getSoul() const { return soul; }
@@ -596,6 +635,17 @@ public:
 
 	void setExperienceRate(ExperienceRateType type, int32_t rate) { experienceRate[static_cast<size_t>(type)] = rate; }
 	void addExperienceRate(ExperienceRateType type, int32_t rate) { experienceRate[static_cast<size_t>(type)] += rate; }
+	void setXpBoostPercent(int32_t percent)
+	{
+		xpBoostPercent = static_cast<uint16_t>(std::clamp<int32_t>(percent, 0, 255));
+	}
+	void setXpBoostTime(uint16_t timeLeft)
+	{
+		xpBoostTime = timeLeft;
+		if (xpBoostTime == 0) {
+			xpBoostPercent = 0;
+		}
+	}
 
 	void setVarStats(stats_t stat, int32_t modifier);
 	int32_t getDefaultStats(stats_t stat) const;
@@ -603,8 +653,8 @@ public:
 	int32_t getHelmetCooldownReduction() const { return helmetCooldownReduction; }
 	void setHelmetCooldownReduction(int32_t value) { helmetCooldownReduction = value; }
 
-	void addConditionSuppressions(uint32_t conditions);
-	void removeConditionSuppressions(uint32_t conditions);
+	void addConditionSuppressions(uint64_t conditions);
+	void removeConditionSuppressions(uint64_t conditions);
 
 	DepotChest* getDepotChest(uint32_t depotId, bool autoCreate);
 	DepotLocker* getDepotLocker(uint32_t depotId);
@@ -1133,6 +1183,9 @@ public:
 	// inventory
 	void onUpdateInventoryItem(Item* oldItem, Item* newItem);
 	void onRemoveInventoryItem(Item* item);
+	bool canReceiveAstraItemState() const;
+	void sendAstraPlayerInventorySnapshot() const;
+	void scheduleAstraPlayerInventorySnapshot();
 
 	void sendCancelMessage(std::string_view msg) const
 	{
@@ -1284,6 +1337,19 @@ public:
 			client->sendOutfitWindow();
 		}
 	}
+	void sendItemInspection(std::shared_ptr<Item> item = nullptr, uint16_t itemId = 0, uint8_t itemCount = 1,
+	                        uint8_t inspectionType = INSPECT_NORMALOBJECT)
+	{
+		if (client) {
+			client->sendItemInspection(item, itemId, itemCount, inspectionType);
+		}
+	}
+	void sendMonsterPodiumWindow(const Item* podium, const Position& position, uint16_t itemId, uint8_t stackPos)
+	{
+		if (client) {
+			client->sendMonsterPodiumWindow(podium, position, itemId, stackPos);
+		}
+	}
 	void sendCloseContainer(uint8_t cid)
 	{
 		if (client) {
@@ -1428,12 +1494,16 @@ public:
 	bool isSecureModeEnabled() const { return secureMode; }
 
 	bool checkChainSystem() const;
+	bool checkCleaveSystem() const;
+
+	void resetCachedSettings() { cachedPlayerSettings_ = nullptr; }
 
 	bool hasDebugAssertSent() const { return client ? client->debugAssertSent : false; }
 
 	bool isOTCv8() const { return client ? client->isOTCv8 : false; }
 	bool isMehah() const { return client ? client->isMehah : false; }
 	bool isAstraClient() const { return client ? client->isAstraClient : false; }
+	bool isFonticakClient() const { return client ? client->isFonticakClient : false; }
 	bool isOTC() const
 	{
 		switch (operatingSystem) {
@@ -1459,6 +1529,8 @@ public:
 	int32_t totalDropBonus = 0;
 
 private:
+	mutable std::shared_ptr<KV> cachedPlayerSettings_;
+
 	struct PreyCombatBonus {
 		uint16_t damageBoost = 0;
 		uint16_t damageReduction = 0;
@@ -1482,6 +1554,7 @@ private:
 	void updateInventoryWeight();
 	void reloadEquipmentStats();
 	void applyEquipmentStats();
+	void flushAstraPlayerInventorySnapshot();
 
 	void setNextWalkActionTask(std::unique_ptr<SchedulerTask> task);
 	void setNextWalkTask(std::unique_ptr<SchedulerTask> task);
@@ -1499,12 +1572,14 @@ private:
 	                          uint32_t flags) const override;
 	ReturnValue queryRemove(const Thing& thing, uint32_t count, uint32_t flags,
 	                        Creature* actor = nullptr) const override;
-	Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags) override;
+	Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags,
+	                           uint32_t destinationInstanceId) override;
 
 	void addThing(Thing*) override {}
 	void addThing(int32_t index, Thing* thing) override;
 
 	void updateThing(Thing* thing, uint16_t itemId, uint32_t count) override;
+	void refreshThing(Thing* thing) override;
 	void replaceThing(uint32_t index, Thing* thing) override;
 
 	void removeThing(Thing* thing, uint32_t count) override;
@@ -1559,6 +1634,9 @@ private:
 	uint64_t manaSpent = 0;
 	uint64_t lastAttack = 0;
 	uint64_t bankBalance = 0;
+	uint64_t taskHuntingPoints = 0;
+	uint64_t bountyPoints = 0;
+	uint64_t soulsealsPoints = 0;
 	int64_t lastFailedFollow = 0;
 	int64_t skullTicks = 0;
 	int64_t lastToggleMount = 0;
@@ -1592,8 +1670,8 @@ private:
 	uint32_t inventoryWeight = 0;
 	uint32_t capacity = 40000;
 	uint32_t damageImmunities = 0;
-	uint32_t conditionImmunities = 0;
-	uint32_t conditionSuppressions = 0;
+	uint64_t conditionImmunities = 0;
+	uint64_t conditionSuppressions = 0;
 	uint32_t level = 1;
 	uint32_t reset = 0; // reset system
 	int32_t resetAttackSpeedBonus = 0;
@@ -1637,6 +1715,8 @@ private:
 
 	uint16_t lastStatsTrainingTime = 0;
 	uint16_t staminaMinutes = 2520;
+	uint16_t xpBoostTime = 0;
+	uint16_t xpBoostPercent = 0;
 	uint16_t protectionTime = 10;
 	uint16_t maxWriteLen = 0;
 	int16_t lastDepotId = -1;
@@ -1681,9 +1761,11 @@ private:
 	bool tokenLocked = false;
 	bool staminaPzActive = false;
 	bool staminaTrainerActive = false;
+	bool astraPlayerInventorySnapshotScheduled = false;
 	uint8_t m_harmony = 0;
 	bool m_serene = false;
 	uint64_t m_serene_cooldown = 0;
+	bool m_hasWeeklyExpansion = false;
 	int64_t rootImmunityEnd = 0;
 	int64_t fearImmunityEnd = 0;
 	VirtueMonk_t m_virtue = VIRTUE_NONE;
@@ -1715,8 +1797,8 @@ private:
 		return skillLoss ? static_cast<uint64_t>(experience * getLostPercent()) : 0;
 	}
 	uint32_t getDamageImmunities() const override { return damageImmunities; }
-	uint32_t getConditionImmunities() const override { return conditionImmunities; }
-	uint32_t getConditionSuppressions() const override { return conditionSuppressions; }
+	uint64_t getConditionImmunities() const override { return conditionImmunities; }
+	uint64_t getConditionSuppressions() const override { return conditionSuppressions; }
 	uint16_t getLookCorpse() const override;
 	void getPathSearchParams(const Creature* creature, FindPathParams& fpp) const override;
 

@@ -150,7 +150,7 @@ function answer:callback(npc, player, message, handler)
             playerName = playerName ~= "" and playerName .. " " .. data[i] or data[i]
         end
     end
-    local receiver = getPlayerDatabaseInfo(playerName)
+    local receiver = Player.getPlayerDatabaseInfo(playerName)
     if not receiver then
         return false, "There is no one named like " .. playerName
     end
@@ -175,7 +175,7 @@ local accept = answer:keyword({ "yes" })
 function accept:callback(npc, player, message, handler)
     local money = handler:getData(player, "money")
     local playerName = handler:getData(player, "playerName")
-    local receiver = getPlayerDatabaseInfo(playerName)
+    local receiver = Player.getPlayerDatabaseInfo(playerName)
     if not player:transferMoneyTo(receiver, money) then
         return false, "You don't have enough money to transfer " .. money .. " gold coins to " .. playerName
     end
@@ -346,7 +346,7 @@ function fast:callback(npc, player, message, handler)
                 playerName = playerName ~= "" and playerName .. " " .. data[i] or data[i]
             end
         end
-        local receiver = getPlayerDatabaseInfo(playerName)
+        local receiver = Player.getPlayerDatabaseInfo(playerName)
         if not receiver then
             return false, "There is no one named like '" .. playerName .. "'"
         end
@@ -421,7 +421,7 @@ local accept = fast:keyword({ "yes" })
 function accept:callback(npc, player, message, handler)
     local money = handler:getData(player, "money")
     local playerName = handler:getData(player, "playerName")
-    local receiver = getPlayerDatabaseInfo(playerName)
+    local receiver = Player.getPlayerDatabaseInfo(playerName)
     local type = handler:getData(player, "type")
     if type == "transfer" then
         if not player:transferMoneyTo(receiver, money) then

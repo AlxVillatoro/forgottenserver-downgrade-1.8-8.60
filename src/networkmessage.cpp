@@ -106,12 +106,50 @@ void NetworkMessage::addItemId(uint16_t itemId)
 	add<uint16_t>(clientId);
 }
 
-void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags)
+namespace {
+
+constexpr uint8_t AstraItemFlagEquipable = 1 << 0;
+constexpr uint8_t AstraItemFlagAmmo = 1 << 1;
+
+bool isAstraItemMetadataEquipable(const ItemType& it)
+{
+	return it.weaponType != WEAPON_NONE || it.ammoType != AMMO_NONE || it.attack != 0 || it.defense != 0 ||
+	       it.extraDefense != 0 || it.armor != 0 || (it.slotPosition & SLOTP_NECKLACE) != 0 ||
+	       (it.slotPosition & SLOTP_RING) != 0 || (it.slotPosition & SLOTP_AMMO) != 0 ||
+	       (it.slotPosition & SLOTP_FEET) != 0 || (it.slotPosition & SLOTP_HEAD) != 0 ||
+	       (it.slotPosition & SLOTP_ARMOR) != 0 || (it.slotPosition & SLOTP_LEGS) != 0;
+}
+
+uint8_t getAstraItemMetadataFlags(const ItemType& it)
+{
+	uint8_t flags = 0;
+	if (it.weaponType == WEAPON_AMMO) {
+		flags |= AstraItemFlagAmmo;
+	}
+	if (isAstraItemMetadataEquipable(it)) {
+		flags |= AstraItemFlagEquipable;
+	}
+	return flags;
+}
+
+void addAstraItemMetadata(NetworkMessage& msg, const ItemType& it)
+{
+	msg.add<uint16_t>(it.slotPosition);
+	msg.addByte(getAstraItemMetadataFlags(it));
+}
+
+} // namespace
+
+void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alwaysSendTier, bool sendQuickLootFlags,
+                             bool sendAstraItemState, bool sendAstraQuiverCountU16)
 {
 	addItemId(id);
 
 	const ItemType& it = Item::items[id];
-	if (it.stackable) {
+	if (sendAstraQuiverCountU16 && it.weaponType == WEAPON_QUIVER) {
+		// This overload only has the caller-provided subtype/count; real quiver ammo count is sent by the Item* overload.
+		add<uint16_t>(count);
+	} else if (it.stackable) {
 		addByte(count);
 	} else if (it.isSplash() || it.isFluidContainer()) {
 		addByte(fluidMap[count & 7]);
@@ -125,17 +163,28 @@ void NetworkMessage::addItem(uint16_t id, uint8_t count, bool sendTier, bool alw
 	    (alwaysSendTier || (ConfigManager::getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) && it.classification > 0))) {
 		addByte(static_cast<uint8_t>(it.tier));
 	}
+
+	if (sendAstraItemState) {
+		addByte(0); // no instance duration is available in the id/count overload
+		addByte(0); // no instance charges are available in the id/count overload
+		addAstraItemMetadata(*this, it);
+	}
 }
 
 void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTier, bool sendQuiverCount,
-                             bool sendQuickLootFlags)
+                             bool sendQuickLootFlags, bool sendAstraItemState, bool sendAstraQuiverCountU16)
 {
 	addItemId(item->getID());
 
 	const ItemType& it = Item::items[item->getID()];
-	if (sendQuiverCount && item->getWeaponType() == WEAPON_QUIVER) {
+	if ((sendQuiverCount || sendAstraQuiverCountU16) && item->getWeaponType() == WEAPON_QUIVER) {
 		const Container* quiver = item->getContainer();
-		addByte(static_cast<uint8_t>(std::min<uint32_t>(0xFF, quiver ? quiver->getAmmoCount() : 0)));
+		const uint32_t ammoCount = quiver ? quiver->getAmmoCount() : 0;
+		if (sendAstraQuiverCountU16) {
+			add<uint16_t>(static_cast<uint16_t>(std::min<uint32_t>(0xFFFF, ammoCount)));
+		} else {
+			addByte(static_cast<uint8_t>(std::min<uint32_t>(0xFF, ammoCount)));
+		}
 	} else if (it.stackable) {
 		addByte(static_cast<uint8_t>(std::min<uint16_t>(0xFF, item->getItemCount())));
 	} else if (it.isSplash() || it.isFluidContainer()) {
@@ -149,6 +198,31 @@ void NetworkMessage::addItem(const Item* item, bool sendTier, bool alwaysSendTie
 	if (sendTier && ConfigManager::getBoolean(ConfigManager::ITEM_TIER_DISPLAY) &&
 	    (alwaysSendTier || (ConfigManager::getBoolean(ConfigManager::ITEM_UPGRADE_CLASSIFICATION) && it.classification > 0))) {
 		addByte(item->getTier());
+	}
+
+	if (sendAstraItemState) {
+		const bool hasVisualDuration = it.showDuration || it.wearOut || it.clockExpire || it.expire || it.expireStop;
+		const bool hasDuration = hasVisualDuration && item->getDuration() > 0;
+		addByte(hasDuration ? 1 : 0);
+		if (hasDuration) {
+			add<uint32_t>(static_cast<uint32_t>(std::max<int32_t>(0, item->getDuration()) / 1000));
+			addByte(it.stopTime ? 1 : 0);
+		}
+
+		uint32_t charges = 0;
+		if (it.charges != 0) {
+			charges = item->getSubType();
+		} else if (it.showCharges || item->hasAttribute(ITEM_ATTRIBUTE_CHARGES)) {
+			charges = item->getCharges();
+		}
+
+		addByte(charges > 0 ? 1 : 0);
+		if (charges > 0) {
+			add<uint32_t>(charges);
+			addByte((it.charges != 0 && charges == it.charges) ? 1 : 0);
+		}
+
+		addAstraItemMetadata(*this, it);
 	}
 }
 

@@ -448,9 +448,14 @@ bool ConfigManager::load()
 	booleans[Boolean::BESTIARY_SYSTEM_ENABLED] = getGlobalBoolean(L, "bestiarySystemEnabled", false);
 	booleans[Boolean::MARKET_SYSTEM_ENABLED] = getGlobalBoolean(L, "marketSystemEnabled", false);
 	booleans[Boolean::PREY_SYSTEM_ENABLED] = getGlobalBoolean(L, "preySystemEnabled", false);
+	booleans[Boolean::BATTLEPASS_SYSTEM_ENABLED] = getGlobalBoolean(L, "battlePassSystemEnabled", false);
 	booleans[Boolean::WEAPON_PROFICIENCY_SYSTEM_ENABLED] = getGlobalBoolean(L, "weaponProficiencySystemEnabled", false);
 	booleans[Boolean::AUGMENT_SYSTEM_ENABLED] = getGlobalBoolean(L, "augmentSystemEnabled", false);
 	booleans[Boolean::MONSTER_LEVEL_ENABLED] = getGlobalBoolean(L, "monsterLevelEnabled", false);
+	booleans[Boolean::MONSTER_FACTION_SYSTEM] = getGlobalBoolean(L, "monsterFactionSystem", false);
+	booleans[Boolean::MONSTER_FACTION_REQUIRE_PLAYER_NEARBY] =
+	    getGlobalBoolean(L, "monsterFactionRequirePlayerNearby", true);
+	booleans[Boolean::MONSTER_FACTION_PREFER_PLAYERS] = getGlobalBoolean(L, "monsterFactionPreferPlayers", true);
 	booleans[Boolean::LOOT_GROUPING_ENABLED] = getGlobalBoolean(L, "lootGroupingEnabled", true);
 	booleans[Boolean::ALLOW_MOUNT_IN_PZ] = getGlobalBoolean(L, "allowMountInPz", false);
 	booleans[Boolean::CHAIN_SYSTEM_ENABLED] = getGlobalBoolean(L, "toggleChainSystem", true);
@@ -462,11 +467,27 @@ bool ConfigManager::load()
 	booleans[Boolean::RAID_SPAWN_FILE_ENABLED] = getGlobalBoolean(L, "raidSpawnFileEnabled", true);
 	booleans[Boolean::POWERLAW] = getGlobalBoolean(L, "powerlaw", false);
 	booleans[Boolean::ASTRA_CLIENT_ONLY] = getGlobalBoolean(L, "astraClientOnly", false);
+	booleans[Boolean::FONTICAK_CLIENT_ONLY] = getGlobalBoolean(L, "fonticakClientOnly", false);
+	booleans[Boolean::ASTRA_ITEM_STATE_ENABLED] = getGlobalBoolean(L, "astraItemStateEnabled", false);
+	booleans[Boolean::HIRELING_SYSTEM_ENABLED] = getGlobalBoolean(L, "hirelingSystemEnabled", false);
+	booleans[Boolean::ASTRA_HIRELING_PROTOCOL_ENABLED] =
+	    getGlobalBoolean(L, "astraHirelingProtocolEnabled", false);
 	booleans[Boolean::COLORIZED_LOOT_VALUE] = getGlobalBoolean(L, "enableColorizedLootValue", false);
 	booleans[Boolean::ITEM_TIER_DISPLAY] = getGlobalBoolean(L, "enableItemTierDisplay", false);
 	booleans[Boolean::ITEM_UPGRADE_CLASSIFICATION] = getGlobalBoolean(L, "enableItemUpgradeClassification", false);
 	booleans[Boolean::QUICK_LOOT_ENABLED] = getGlobalBoolean(L, "enableQuickLoot", false);
+	booleans[Boolean::TASK_HUNTING_SYSTEM_ENABLED] = getGlobalBoolean(L, "taskHuntingSystemEnabled", false);
+	booleans[Boolean::BOUNTY_TASKS_ENABLED] = getGlobalBoolean(L, "bountyTasksEnabled", false);
+	booleans[Boolean::WEEKLY_TASKS_ENABLED] = getGlobalBoolean(L, "weeklyTasksEnabled", false);
+	booleans[Boolean::SOULPIT_SYSTEM_ENABLED] = getGlobalBoolean(L, "soulpitSystemEnabled", false);
+	booleans[Boolean::SOULSEALS_SYSTEM_ENABLED] = getGlobalBoolean(L, "soulsealsSystemEnabled", false);
 
+	// Normalize: if task hunting is off, dependent features are also off
+	if (!booleans[Boolean::TASK_HUNTING_SYSTEM_ENABLED]) {
+		booleans[Boolean::BOUNTY_TASKS_ENABLED] = false;
+		booleans[Boolean::WEEKLY_TASKS_ENABLED] = false;
+		booleans[Boolean::SOULSEALS_SYSTEM_ENABLED] = false;
+	}
 	// Stress Reactor
 	booleans[Boolean::STRESS_TEST] = getGlobalBoolean(L, "stressTest", false);
 	booleans[Boolean::STRESS_TEST_SEND] = getGlobalBoolean(L, "stressTestSend", true);
@@ -490,14 +511,30 @@ bool ConfigManager::load()
 	booleans[Boolean::STRESS_TEST_MIXED_DELAYS] = getGlobalBoolean(L, "stressTestMixedDelays", true);
 	booleans[Boolean::STRESS_TEST_LEAK] = getGlobalBoolean(L, "stressTestLeak", true);
 	booleans[Boolean::STRESS_TEST_SHUTDOWN_SEND] = getGlobalBoolean(L, "stressTestShutdownSend", true);
+	booleans[Boolean::CLEAVE_SYSTEM_ENABLED] = getGlobalBoolean(L, "cleavesystem", true);
+	booleans[Boolean::CHARACTER_BAZAAR_ENABLED] = getGlobalBoolean(L, "characterBazaarEnabled", false);
+
+	integers[Integer::CLEAVE_DEFAULT_PERCENT] = std::clamp<int64_t>(getGlobalInteger(L, "cleaveDefaultPercent", 30), 0, 100);
+	integers[Integer::CLEAVE_FIST_PERCENT] = std::clamp<int64_t>(getGlobalInteger(L, "cleaveFistPercent", 20), 0, 100);
+	integers[Integer::CHARACTER_BAZAAR_MIN_LEVEL] = std::max<int64_t>(1, getGlobalInteger(L, "characterBazaarMinLevel", 50));
+	integers[Integer::CHARACTER_BAZAAR_MIN_PRICE] = std::max<int64_t>(1, getGlobalInteger(L, "characterBazaarMinPrice", 100));
+	integers[Integer::CHARACTER_BAZAAR_AUCTION_FEE] = std::max<int64_t>(0, getGlobalInteger(L, "characterBazaarAuctionFee", 50));
+	integers[Integer::CHARACTER_BAZAAR_COMMISSION_PERCENT] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "characterBazaarCommissionPercent", 10), 0, 100);
+	integers[Integer::CHARACTER_BAZAAR_MIN_DURATION_HOURS] =
+	    std::max<int64_t>(1, getGlobalInteger(L, "characterBazaarMinDurationHours", 24));
+	integers[Integer::CHARACTER_BAZAAR_MAX_DURATION_DAYS] =
+	    std::max<int64_t>(1, getGlobalInteger(L, "characterBazaarMaxDurationDays", 7));
 
 	// Admin Config
 	booleans[Boolean::ADMIN_LOCALHOST_ONLY] = getGlobalBoolean(L, "adminLocalhostOnly", true);
 	booleans[Boolean::ADMIN_REQUIRE_LOGIN] = getGlobalBoolean(L, "adminRequireLogin", true);
 	booleans[Boolean::ADMIN_LOGS] = getGlobalBoolean(L, "adminLogs", false);
+	booleans[Boolean::LOG_TO_FILE] = getGlobalBoolean(L, "logToFile", false);
 	booleans[Boolean::SLOW_TASK_WARNING] = getGlobalBoolean(L, "slowTaskWarning", true);
 
 	strings[String::DEFAULT_PRIORITY] = getGlobalString(L, "defaultPriority", "high");
+	strings[String::LOG_LEVEL] = getGlobalString(L, "logLevel", "info");
 	strings[String::SERVER_NAME] = getGlobalString(L, "serverName", "");
 	strings[String::OWNER_NAME] = getGlobalString(L, "ownerName", "");
 	strings[String::OWNER_EMAIL] = getGlobalString(L, "ownerEmail", "");
@@ -677,6 +714,8 @@ bool ConfigManager::load()
 	integers[Integer::RATE_EXERCISE_TRAINING_SPEED] = getGlobalInteger(L, "rateExerciseTrainingSpeed", 1.0);
 	integers[Integer::DLL_CHECK_KICK_TIME] = getGlobalInteger(L, "dllCheckKickTime", 300);
 	integers[Integer::OFFLINE_TRAINING_THRESHOLD] = getGlobalInteger(L, "offlineTrainingThreshold", 600);
+	integers[Integer::BOSS_DEFAULT_TIME_TO_FIGHT_AGAIN] = getGlobalInteger(L, "bossDefaultTimeToFightAgain", 20 * 60 * 60);
+	integers[Integer::BOSS_DEFAULT_TIME_TO_DEFEAT] = getGlobalInteger(L, "bossDefaultTimeToDefeat", 10 * 60);
 
 	integers[Integer::STATS_DUMP_INTERVAL] = getGlobalInteger(L, "statsDumpInterval", 30000);
 	integers[Integer::STATS_SLOW_LOG_TIME] = getGlobalInteger(L, "statsSlowLogTime", 10);
@@ -735,6 +774,15 @@ bool ConfigManager::load()
 	integers[Integer::NETWORK_THREADS] = getGlobalInteger(L, "networkThreads", 2);
 	integers[Integer::CONNECTION_RATE_LIMIT_ALLOWED] = getGlobalInteger(L, "connectionRateLimitAllowed", 10);
 	integers[Integer::CONNECTION_RATE_LIMIT_MS] = getGlobalInteger(L, "connectionRateLimitMS", 500);
+
+	// Reactor Limits
+	integers[Integer::REACTOR_MAX_TASKS_PER_CYCLE] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "reactorMaxTasksPerCycle", 1000),
+	                        0, std::numeric_limits<uint32_t>::max());
+	integers[Integer::REACTOR_TIME_BUDGET_MS] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "reactorTimeBudgetMS", 25), 0, 1000);
+	integers[Integer::REACTOR_MAX_INBOX_SIZE] =
+	    std::clamp<int64_t>(getGlobalInteger(L, "reactorMaxInboxSize", 200000), 1, 10'000'000);
 
 	loaded = true;
 	// ownedL destructor calls lua_close via LuaStateDeleter

@@ -25,6 +25,11 @@ std::shared_ptr<Creature> lockCreature(Creature* creature)
 	return creature ? creature->weak_from_this().lock() : nullptr;
 }
 
+std::shared_ptr<Monster> lockMonster(Creature* creature)
+{
+	return std::dynamic_pointer_cast<Monster>(lockCreature(creature));
+}
+
 bool isPlayerControlledCreature(const Creature* creature)
 {
 	if (!creature) {
@@ -37,6 +42,21 @@ bool isPlayerControlledCreature(const Creature* creature)
 
 	auto master = creature->getMaster();
 	return master && master->getPlayer();
+}
+
+bool rollMonsterCritical(const std::shared_ptr<Monster>& monster, const CombatDamage& damage, int32_t& skill)
+{
+	if (!monster || damage.critical || damage.primary.type == COMBAT_HEALING || damage.origin == ORIGIN_CONDITION) {
+		return false;
+	}
+
+	const int32_t chance = std::clamp<int32_t>(
+	    static_cast<int32_t>(monster->getCriticalChance()) * 100 + damage.criticalChance, 0, 10000);
+	skill = std::max<int32_t>(0, damage.criticalDamage);
+	if (skill == 0 && chance > 0) {
+		skill = 5000;
+	}
+	return chance > 0 && skill > 0 && uniform_random(1, 10000) <= chance;
 }
 
 } // namespace
@@ -96,6 +116,74 @@ std::vector<Tile*> getCombatArea(const Position& centerPos, const Position& targ
 		g_game.map.setTile(targetPos, std::move(newTile));
 	}
 	return {tile};
+}
+
+uint32_t Combat::getCleaveDefaultPercent()
+{
+	return static_cast<uint32_t>(ConfigManager::getInteger(ConfigManager::CLEAVE_DEFAULT_PERCENT));
+}
+
+uint32_t Combat::getCleaveFistPercent()
+{
+	return static_cast<uint32_t>(ConfigManager::getInteger(ConfigManager::CLEAVE_FIST_PERCENT));
+}
+
+void Combat::doCombatCleave(Creature* caster, uint32_t primaryTargetId, const CombatDamage& originalDamage,
+                            const CombatParams& params, uint32_t cleavePercent)
+{
+	if (cleavePercent == 0 || !caster) {
+		return;
+	}
+
+	const uint32_t casterId = caster->getID();
+	const Position casterPos = caster->getPosition();
+
+	// onlyMonsters=true guarantees players are never returned, so cleave never hits players even in open-PvP zones.
+	// The getMaster check below still guards against player summons/familiars (which also satisfy isMonster()).
+	SpectatorVec spectators;
+	g_game.map.getSpectators(spectators, casterPos, false, false, 1, 1, 1, 1, true);
+
+	auto resolvedCasterRef = g_game.getCreatureByIDShared(casterId);
+	Creature* resolvedCaster = resolvedCasterRef.get();
+	if (!resolvedCaster || resolvedCaster->isRemoved()) {
+		return;
+	}
+
+	for (const auto& spectator : spectators) {
+		if (resolvedCaster->isRemoved()) {
+			break;
+		}
+
+		Creature* creature = spectator.get();
+		if (!creature || creature == resolvedCaster || creature->getID() == primaryTargetId) {
+			continue;
+		}
+
+		if (Combat::canDoCombat(resolvedCaster, creature) != RETURNVALUE_NOERROR) {
+			continue;
+		}
+
+		if (auto master = creature->getMaster()) {
+			if (master->getPlayer()) {
+				continue;
+			}
+		}
+
+		CombatDamage cleaveDamage;
+		cleaveDamage.primary.type = originalDamage.primary.type;
+		cleaveDamage.primary.value = (originalDamage.primary.value * static_cast<int32_t>(cleavePercent)) / 100;
+		cleaveDamage.secondary.type = originalDamage.secondary.type;
+		cleaveDamage.secondary.value = (originalDamage.secondary.value * static_cast<int32_t>(cleavePercent)) / 100;
+		cleaveDamage.origin = originalDamage.origin;
+
+		CombatParams cleaveParams;
+		cleaveParams.impactEffect = params.impactEffect;
+		cleaveParams.combatType = params.combatType;
+		cleaveParams.blockedByArmor = params.blockedByArmor;
+		cleaveParams.blockedByShield = params.blockedByShield;
+
+		Combat::doTargetCombat(resolvedCaster, creature, cleaveDamage, cleaveParams);
+	}
 }
 
 CombatDamage Combat::getCombatDamage(Creature* creature, Creature* target, std::string_view instantSpellName) const
@@ -747,9 +835,9 @@ void Combat::combatTileEffects(const SpectatorVec& spectators, Creature* caster,
 			}
 			Game::addMagicEffect(filtered, tile->getPosition(), params.impactEffect);
 		} else {
-			Game::addMagicEffect(spectators, tile->getPosition(), params.impactEffect);
-        }
-    }
+			g_game.addMagicEffect(tile->getPosition(), params.impactEffect, 0);
+		}
+	}
 }
 
 void Combat::postCombatEffects(Creature* caster, const Position& pos, const CombatParams& params)
@@ -806,9 +894,9 @@ void Combat::addDistanceEffect(Creature* caster, const Position& fromPos, const 
 			}
 			g_game.addDistanceEffect(filtered, fromPos, toPos, effect);
 		} else {
-			g_game.addDistanceEffect(fromPos, toPos, effect);
-        }
-    }
+			g_game.addDistanceEffect(fromPos, toPos, effect, 0);
+		}
+	}
 }
 
 void Combat::doCombat(Creature* caster, Creature* target, std::string_view instantSpellName) const
@@ -836,7 +924,7 @@ void Combat::doCombat(Creature* caster, Creature* target, std::string_view insta
 				}
 			}
 			Game::addMagicEffect(filtered, target->getPosition(), params.impactEffect);
-        }
+		}
 
 		if (canCombat) {
 			doTargetCombat(caster, target, damage, params);
@@ -1069,6 +1157,13 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 					}
 				}
 			}
+		} else if (auto casterMonster = lockMonster(caster)) {
+			int32_t skill = 0;
+			if (rollMonsterCritical(casterMonster, damage, skill)) {
+				damage.primary.value += std::round(damage.primary.value * (skill / 10000.));
+				damage.secondary.value += std::round(damage.secondary.value * (skill / 10000.));
+				damage.critical = true;
+			}
 		}
 
 		if (params.resetDamageMultiplier >= 0.0f) {
@@ -1076,12 +1171,9 @@ void Combat::doTargetCombat(Creature* caster, Creature* target, CombatDamage& da
 		}
 
 		if (casterPlayer && wpEnabled) {
-			if (Monster* targetMonster = target ? target->getMonster() : nullptr) {
-				auto monsterRef = targetMonster->weak_from_this().lock();
-				if (monsterRef) {
-					casterPlayer->weaponProficiency().applyBestiaryDamage(damage, std::static_pointer_cast<Monster>(monsterRef));
-					casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damage, std::static_pointer_cast<Monster>(monsterRef));
-				}
+			if (auto targetMonster = lockMonster(target)) {
+				casterPlayer->weaponProficiency().applyBestiaryDamage(damage, targetMonster);
+				casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damage, targetMonster);
 			}
 		}
 
@@ -1289,6 +1381,13 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 			criticalSecondary = std::round(damage.secondary.value * (skill / 10000.));
 			damage.critical = true;
 		}
+	} else if (auto casterMonster = lockMonster(caster)) {
+		int32_t skill = 0;
+		if (rollMonsterCritical(casterMonster, damage, skill)) {
+			criticalPrimary = std::round(damage.primary.value * (skill / 10000.));
+			criticalSecondary = std::round(damage.secondary.value * (skill / 10000.));
+			damage.critical = true;
+		}
 	}
 
 	int32_t maxX = 0;
@@ -1383,12 +1482,9 @@ void Combat::doAreaCombat(Creature* caster, const Position& position, const Area
 			}
 
 			if (casterPlayer && wpEnabled) {
-				if (Monster* targetMonster = creature->getMonster()) {
-					auto monsterRef = targetMonster->weak_from_this().lock();
-					if (monsterRef) {
-						casterPlayer->weaponProficiency().applyBestiaryDamage(damageCopy, std::static_pointer_cast<Monster>(monsterRef));
-						casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damageCopy, std::static_pointer_cast<Monster>(monsterRef));
-					}
+				if (auto targetMonster = std::dynamic_pointer_cast<Monster>(creature)) {
+					casterPlayer->weaponProficiency().applyBestiaryDamage(damageCopy, targetMonster);
+					casterPlayer->weaponProficiency().applyPowerfulFoeDamage(damageCopy, targetMonster);
 				}
 			}
 
@@ -1583,7 +1679,7 @@ void TileCallback::onTileCombat(Creature* creature, Tile* tile) const
 	} else {
 		lua_pushnil(L);
 	}
-	Lua::pushPosition(L, tile->getPosition());
+	Lua::pushPosition(L, tile->getPosition(), 0, creature ? creature->getInstanceID() : 0);
 
 	scriptInterface->callFunction(2);
 }
@@ -1908,14 +2004,14 @@ void Combat::setChainCallback(uint8_t chainTargets, uint8_t chainDistance, bool 
 	params.chainCallback = std::make_unique<ChainCallback>(chainTargets, chainDistance, backtracking);
 }
 
-void Combat::doChainEffect(const Position& origin, const Position& pos, uint8_t effect)
+void Combat::doChainEffect(const Position& origin, const Position& pos, uint8_t effect, uint32_t instanceId)
 {
 	if (effect == CONST_ME_NONE) {
 		return;
 	}
 
-	g_game.addMagicEffect(origin, effect);
-	g_game.addMagicEffect(pos, effect);
+	g_game.addMagicEffect(origin, effect, instanceId);
+	g_game.addMagicEffect(pos, effect, instanceId);
 }
 
 bool Combat::isValidChainTarget(Creature* caster, Creature* currentTarget, Creature* potentialTarget,
@@ -2084,12 +2180,14 @@ bool Combat::doCombatChain(Creature* caster, Creature* target, bool aggressive, 
 		for (const auto& to : toVector) {
 			g_scheduler.addEvent(delay, [self, casterId = caster ? caster->getID() : 0, to, from, capturedChainEffect,
 			                             instantSpellName]() {
-				Creature* resolvedCaster = g_game.getCreatureByID(casterId);
-				Creature* nextTarget = g_game.getCreatureByID(to);
+				auto resolvedCasterRef = g_game.getCreatureByIDShared(casterId);
+				Creature* resolvedCaster = resolvedCasterRef.get();
+				auto nextTargetRef = g_game.getCreatureByIDShared(to);
+				Creature* nextTarget = nextTargetRef.get();
 				if (!nextTarget) {
 					return;
 				}
-				Combat::doChainEffect(from, nextTarget->getPosition(), capturedChainEffect);
+				Combat::doChainEffect(from, nextTarget->getPosition(), capturedChainEffect, nextTarget->getInstanceID());
 				if (resolvedCaster) {
 					CombatDamage damage = self->getCombatDamage(resolvedCaster, nextTarget, instantSpellName);
 					bool canCombat = !self->params.aggressive ||
@@ -2202,7 +2300,7 @@ void MagicField::onStepInField(const std::shared_ptr<Creature>& creature)
 			bool harmfulField = true;
 
 			if (g_game.getWorldType() == WORLD_TYPE_NO_PVP || fieldTile->hasFlag(TILESTATE_NOPVPZONE)) {
-				auto owner = lockCreature(g_game.getCreatureByID(ownerId));
+				auto owner = g_game.getCreatureByIDShared(ownerId);
 				if (owner) {
 					auto ownerMaster = owner->getMaster();
 					if (owner->getPlayer() || (owner->isSummon() && ownerMaster && ownerMaster->getPlayer())) {

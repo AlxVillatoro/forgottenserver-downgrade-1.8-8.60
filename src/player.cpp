@@ -79,6 +79,31 @@ void addClamped(int32_t& target, int64_t value)
 	                                                 std::numeric_limits<int32_t>::max()));
 }
 
+bool isOwnedInventoryItem(const Player* player, const Item* item)
+{
+	return player && item && item->getTopParent() == player;
+}
+
+bool isOwnedOrOpenContainer(const Player* player, const Container* container)
+{
+	if (!player || !container) {
+		return false;
+	}
+
+	if (container->getTopParent() == player) {
+		return true;
+	}
+
+	for (const auto& it : player->getOpenContainers()) {
+		auto openContainer = it.second.container.lock();
+		if (openContainer.get() == container) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void addSpellAugmentBonus(ProficiencySpellAugmentBonus& bonus, Augment_t augmentType, double value)
 {
 	switch (augmentType) {
@@ -288,6 +313,65 @@ uint16_t Player::getPreyDamageReduction(std::string_view monsterName) const
 		}
 	}
 	return 0;
+}
+
+// Task Hunting / Bounty / Soulseals
+
+void Player::addTaskHuntingPoints(uint64_t points)
+{
+	uint64_t maxVal = std::numeric_limits<uint64_t>::max();
+	if (taskHuntingPoints > maxVal - points) {
+		taskHuntingPoints = maxVal; // saturate
+	} else {
+		taskHuntingPoints += points;
+	}
+}
+
+bool Player::removeTaskHuntingPoints(uint64_t points)
+{
+	if (taskHuntingPoints < points) {
+		return false;
+	}
+	taskHuntingPoints -= points;
+	return true;
+}
+
+void Player::addBountyPoints(uint64_t points)
+{
+	uint64_t maxVal = std::numeric_limits<uint64_t>::max();
+	if (bountyPoints > maxVal - points) {
+		bountyPoints = maxVal;
+	} else {
+		bountyPoints += points;
+	}
+}
+
+bool Player::removeBountyPoints(uint64_t points)
+{
+	if (bountyPoints < points) {
+		return false;
+	}
+	bountyPoints -= points;
+	return true;
+}
+
+void Player::addSoulsealsPoints(uint64_t points)
+{
+	uint64_t maxVal = std::numeric_limits<uint64_t>::max();
+	if (soulsealsPoints > maxVal - points) {
+		soulsealsPoints = maxVal;
+	} else {
+		soulsealsPoints += points;
+	}
+}
+
+bool Player::removeSoulsealsPoints(uint64_t points)
+{
+	if (soulsealsPoints < points) {
+		return false;
+	}
+	soulsealsPoints -= points;
+	return true;
 }
 
 Player::~Player()
@@ -638,9 +722,9 @@ bool Player::isInventorySlot(slots_t slot) const
 	return slot >= CONST_SLOT_FIRST && slot <= CONST_SLOT_LAST;
 }
 
-void Player::addConditionSuppressions(uint32_t conditions) { conditionSuppressions |= conditions; }
+void Player::addConditionSuppressions(uint64_t conditions) { conditionSuppressions |= conditions; }
 
-void Player::removeConditionSuppressions(uint32_t conditions) { conditionSuppressions &= ~conditions; }
+void Player::removeConditionSuppressions(uint64_t conditions) { conditionSuppressions &= ~conditions; }
 
 Item* Player::getWeapon(slots_t slot, bool ignoreAmmo) const
 {
@@ -2054,9 +2138,7 @@ void Player::onCreatureAppear(Creature* creature, bool isLogin)
 				outfitAttributes = Outfits::getInstance().addAttributes(getID(), outfitId, sex);
 			} else {
 				// Outfit no longer exists after reload, remove old attributes
-				if (outfitAttributes) {
-					outfitAttributes = false;
-				}
+				outfitAttributes = false;
 			}
 		}
 
@@ -2249,7 +2331,7 @@ void Player::updateStaminaRegen(int64_t timePassed)
 				sendTextMessage(MESSAGE_STATUS_SMALL, "You are no longer refilling stamina, because your stamina is already full.");
 			}
 		}
-	} else if (staminaPzActive) {
+	} else {
 		staminaPzActive = false;
 	}
 
@@ -2476,10 +2558,33 @@ void Player::onCreatureMove(Creature* creature, const Tile* newTile, const Posit
 }
 
 // container
-void Player::onAddContainerItem(const Item* item) { checkTradeState(item); }
+void Player::onAddContainerItem(const Item* item)
+{
+	const Container* container = nullptr;
+	if (item) {
+		if (const Cylinder* parent = item->getParent()) {
+			if (const Item* parentItem = parent->getItem()) {
+				container = parentItem->getContainer();
+			}
+		}
+	}
+	if (canReceiveAstraItemState() && (isOwnedInventoryItem(this, item) || isOwnedOrOpenContainer(this, container))) {
+		scheduleAstraPlayerInventorySnapshot();
+	}
+
+	checkTradeState(item);
+}
 
 void Player::onUpdateContainerItem(const Container* container, const Item* oldItem, const Item* newItem)
 {
+	const bool updatesAstraInventory = canReceiveAstraItemState() &&
+	                                   (isOwnedOrOpenContainer(this, container) ||
+	                                    isOwnedInventoryItem(this, oldItem) ||
+	                                    isOwnedInventoryItem(this, newItem));
+	if (oldItem == newItem && updatesAstraInventory) {
+		scheduleAstraPlayerInventorySnapshot();
+	}
+
 	if (oldItem != newItem) {
 		onRemoveContainerItem(container, oldItem);
 	}
@@ -2491,6 +2596,10 @@ void Player::onUpdateContainerItem(const Container* container, const Item* oldIt
 
 void Player::onRemoveContainerItem(const Container* container, const Item* item)
 {
+	if (canReceiveAstraItemState() && (isOwnedOrOpenContainer(this, container) || isOwnedInventoryItem(this, item))) {
+		scheduleAstraPlayerInventorySnapshot();
+	}
+
 	if (tradeState != TRADE_TRANSFER) {
 		checkTradeState(item);
 
@@ -2568,6 +2677,55 @@ void Player::onRemoveInventoryItem(Item* item)
 			}
 		}
 	}
+}
+
+bool Player::canReceiveAstraItemState() const
+{
+	if (!client) {
+		return false;
+	}
+
+	const ProtocolGame_ptr protocol = client->protocol();
+	return protocol && protocol->canSendAstraItemState();
+}
+
+void Player::sendAstraPlayerInventorySnapshot() const
+{
+	if (!client) {
+		return;
+	}
+
+	const ProtocolGame_ptr protocol = client->protocol();
+	if (!protocol || !protocol->canSendAstraItemState()) {
+		return;
+	}
+
+	protocol->sendPlayerInventory();
+}
+
+void Player::scheduleAstraPlayerInventorySnapshot()
+{
+	if (!canReceiveAstraItemState()) {
+		return;
+	}
+
+	if (astraPlayerInventorySnapshotScheduled) {
+		return;
+	}
+
+	astraPlayerInventorySnapshotScheduled = true;
+	const uint32_t playerId = getID();
+	g_dispatcher.addTask([playerId]() {
+		if (auto player = g_game.getPlayerByID(playerId)) {
+			player->flushAstraPlayerInventorySnapshot();
+		}
+	});
+}
+
+void Player::flushAstraPlayerInventorySnapshot()
+{
+	astraPlayerInventorySnapshotScheduled = false;
+	sendAstraPlayerInventorySnapshot();
 }
 
 void Player::checkTradeState(const Item* item)
@@ -2671,7 +2829,7 @@ void Player::onThink(uint32_t interval)
 	}
 
 	const int64_t timeNow = OTSYS_TIME();
-	if (client && !client->isOTCv8 && getIP() != 0 && getBoolean(ConfigManager::DLL_CHECK_KICK)) {
+	if (client && !client->isOTC && !client->isAstraClient && getIP() != 0 && getBoolean(ConfigManager::DLL_CHECK_KICK)) {
 		int64_t checkInterval = getInteger(ConfigManager::DLL_CHECK_KICK_TIME) * 1000;
 		if (timeNow - lastDllCheck >= checkInterval) {
 			lastDllCheck = timeNow;
@@ -3989,7 +4147,8 @@ ReturnValue Player::queryRemove(const Thing& thing, uint32_t count, uint32_t fla
 	return RETURNVALUE_NOERROR;
 }
 
-Cylinder* Player::queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags)
+Cylinder* Player::queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags,
+                                   uint32_t destinationInstanceId)
 {
 	if (index == 0 /*drop to capacity window*/ || index == INDEX_WHEREEVER) {
 		*destItem = nullptr;
@@ -4018,7 +4177,8 @@ Cylinder* Player::queryDestination(int32_t& index, const Thing& thing, Item** de
 				if (autoStack && isStackable) {
 					// try find an already existing item to stack with
 					if (queryAdd(slotIndex, *item, item->getItemCount(), 0) == RETURNVALUE_NOERROR) {
-						if (inventoryItem->equals(item) &&
+						if (inventoryItem->getInstanceID() == destinationInstanceId &&
+						    inventoryItem->equalsIgnoringInstance(item) &&
 						    inventoryItem->getItemCount() < inventoryItem->getStackSize()) {
 							index = slotIndex;
 							*destItem = inventoryItem;
@@ -4078,7 +4238,8 @@ Cylinder* Player::queryDestination(int32_t& index, const Thing& thing, Item** de
 				}
 
 				// try find an already existing item to stack with
-				if (tmpItem->equals(item) && tmpItem->getItemCount() < tmpItem->getStackSize()) {
+				if (tmpItem->getInstanceID() == destinationInstanceId && tmpItem->equalsIgnoringInstance(item) &&
+				    tmpItem->getItemCount() < tmpItem->getStackSize()) {
 					index = n;
 					*destItem = tmpItem.get();
 					return tmpContainer;
@@ -4138,6 +4299,7 @@ void Player::addThing(int32_t index, Thing* thing)
 
 	// send to client
 	sendInventoryItem(static_cast<slots_t>(index), item);
+	scheduleAstraPlayerInventorySnapshot();
 }
 
 void Player::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
@@ -4160,6 +4322,24 @@ void Player::updateThing(Thing* thing, uint16_t itemId, uint32_t count)
 
 	// event methods
 	onUpdateInventoryItem(item, item);
+	scheduleAstraPlayerInventorySnapshot();
+}
+
+void Player::refreshThing(Thing* thing)
+{
+	Item* item = thing ? thing->getItem() : nullptr;
+	if (!item) {
+		return;
+	}
+
+	const int32_t index = getThingIndex(thing);
+	if (index == -1) {
+		return;
+	}
+
+	sendInventoryItem(static_cast<slots_t>(index), item);
+	onUpdateInventoryItem(item, item);
+	scheduleAstraPlayerInventorySnapshot();
 }
 
 void Player::replaceThing(uint32_t index, Thing* thing)
@@ -4197,6 +4377,7 @@ void Player::replaceThing(uint32_t index, Thing* thing)
 	if (oldItem != item) {
 		oldItem->setParent(nullptr);
 	}
+	scheduleAstraPlayerInventorySnapshot();
 }
 
 void Player::removeThing(Thing* thing, uint32_t count)
@@ -4221,6 +4402,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 			item->setParent(nullptr);
 			inventory[index].reset();
+			scheduleAstraPlayerInventorySnapshot();
 		} else {
 			uint8_t newCount = static_cast<uint8_t>(std::max<int32_t>(0, item->getItemCount() - count));
 			item->setItemCount(newCount);
@@ -4230,6 +4412,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 			// event methods
 			onUpdateInventoryItem(item, item);
+			scheduleAstraPlayerInventorySnapshot();
 		}
 	} else {
 		// send change to client
@@ -4240,6 +4423,7 @@ void Player::removeThing(Thing* thing, uint32_t count)
 
 		item->setParent(nullptr);
 		inventory[index].reset();
+		scheduleAstraPlayerInventorySnapshot();
 	}
 }
 
@@ -5384,6 +5568,9 @@ Skulls_t Player::getSkullClient(const Creature* creature) const
 
 	// Influenced/fiendish: OTC gets skull, Astra gets creature icon via 0x8B
 	if (const Monster* monster = creature->getMonster()) {
+		if (monster->isFamiliar() && isAstraClient()) {
+			return SKULL_NONE;
+		}
 		if (monster->isInfluenced() || monster->isFiendish()) {
 			if (isAstraClient()) {
 				return SKULL_NONE;
@@ -5648,9 +5835,18 @@ bool Player::checkChainSystem() const
 		return false;
 	}
 
-	auto playerKV = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", getGUID()));
-	auto settings = playerKV->scoped("settings");
-	auto chainValue = settings->get("chainSystem");
+	if (vocation->canCleave()) {
+		return false;
+	}
+
+	if (isPaladin()) {
+		return false;
+	}
+
+	if (!cachedPlayerSettings_) {
+		cachedPlayerSettings_ = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", getGUID()))->scoped("settings");
+	}
+	auto chainValue = cachedPlayerSettings_->get("chainSystem");
 	if (chainValue.has_value()) {
 		return chainValue->get<BooleanType>();
 	}
@@ -5661,8 +5857,29 @@ bool Player::checkChainSystem() const
 	}
 
 	const bool enabled = legacyValue.value() == 1;
-	settings->set("chainSystem", ValueWrapper(enabled));
+	cachedPlayerSettings_->set("chainSystem", ValueWrapper(enabled));
 	return enabled;
+}
+
+bool Player::checkCleaveSystem() const
+{
+	if (!ConfigManager::getBoolean(ConfigManager::CLEAVE_SYSTEM_ENABLED)) {
+		return false;
+	}
+
+	if (!vocation->canCleave()) {
+		return false;
+	}
+
+	if (!cachedPlayerSettings_) {
+		cachedPlayerSettings_ = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", getGUID()))->scoped("settings");
+	}
+	auto cleaveValue = cachedPlayerSettings_->get("cleaveSystem");
+	if (cleaveValue.has_value()) {
+		return cleaveValue->get<BooleanType>();
+	}
+
+	return true; // enabled by default for vocations that can cleave
 }
 
 PartyShields_t Player::getPartyShield(const Player* player) const
@@ -5785,7 +6002,7 @@ void Player::clearPartyInvitations()
 	invitePartyList.clear();
 }
 
-GuildEmblems_t Player::getGuildEmblem(const Player* player) const
+GuildEmblems_t Player::getGuildEmblem(const Player* player, bool useGuildMembershipEmblems) const
 {
 	if (!player) {
 		return GUILDEMBLEM_NONE;
@@ -5800,10 +6017,20 @@ GuildEmblems_t Player::getGuildEmblem(const Player* player) const
 		return GUILDEMBLEM_NONE;
 	}
 
-	if (getGuild() == playerGuild) {
-		return GUILDEMBLEM_ALLY;
-	} else if (isInWar(player)) {
+	const auto guild = getGuild();
+	if (isInWar(player)) {
 		return GUILDEMBLEM_ENEMY;
+	}
+
+	if (guild == playerGuild) {
+		if (useGuildMembershipEmblems) {
+			return GUILDEMBLEM_MEMBER;
+		}
+		return GUILDEMBLEM_ALLY;
+	}
+
+	if (guild && useGuildMembershipEmblems) {
+		return GUILDEMBLEM_OTHER;
 	}
 
 	return GUILDEMBLEM_NEUTRAL;

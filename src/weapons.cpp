@@ -179,7 +179,7 @@ int32_t Weapon::playerWeaponCheck(Player* player, Creature* target, uint8_t shoo
 			std::ostringstream ss;
 			ss << "You need " << getReqReset() << " resets to use this weapon. You currently have " << player->getReset() << " resets.";
 			player->sendTextMessage(MESSAGE_STATUS_SMALL, ss.str());
-			g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF);
+			g_game.addMagicEffect(player->getPosition(), CONST_ME_POFF, player->getInstanceID());
 			return 0;
 		}
 		damageModifier = damageModifier / 2;
@@ -257,7 +257,15 @@ bool Weapon::useFist(Player* player, Creature* target)
 	damage.primary.type = params.combatType;
 	damage.primary.value = -normal_random(0, maxDamage);
 
+	CombatDamage cleaveSnapshot = damage;
+	uint32_t targetId = target->getID();
 	Combat::doTargetCombat(player, target, damage, params);
+	if (player->checkCleaveSystem()) {
+		uint32_t cleavePercent = Combat::getCleaveFistPercent();
+		if (cleavePercent > 0) {
+			Combat::doCombatCleave(player, targetId, cleaveSnapshot, params, cleavePercent);
+		}
+	}
 	if (!player->hasFlag(PlayerFlag_NotGainSkill) && player->getAddAttackSkill()) {
 		player->addSkillAdvance(SKILL_FIST, 1);
 	}
@@ -265,15 +273,87 @@ bool Weapon::useFist(Player* player, Creature* target)
 	return true;
 }
 
+namespace {
+    [[maybe_unused]] uint8_t markWeaponType(WeaponType_t weaponType) {
+        switch (weaponType) {
+            case WEAPON_SWORD: return 1;
+            case WEAPON_CLUB:  return 2;
+            case WEAPON_AXE:   return 3;
+            case WEAPON_FIST:  return 4;
+            default:           return 4; // fallback fist
+        }
+    }
+}
+
+uint16_t Weapon::getWeaponAttackEffect(const Item* item) const {
+    if (!item) {
+        return CONST_ME_FIST_ATTACK; // Fist attack when no weapon
+    }
+
+	const WeaponType_t weaponType = item->getWeaponType();
+
+	// Determine attack effect based on weapon type
+	switch (weaponType) {
+		case WEAPON_SWORD:
+			return CONST_ME_SWORD_ATTACK;
+
+		case WEAPON_CLUB:
+			return CONST_ME_CLUB_ATTACK;
+
+		case WEAPON_AXE:
+			return CONST_ME_AXE_ATTACK;
+
+		case WEAPON_FIST: {
+			switch (item->getID()) {
+				// Staff weapons
+				case ITEM_BAMBO_JO:
+				case ITEM_COBRA_BO:
+				case ITEM_DRACHAKU:
+				case ITEM_JO_STAFF:
+				case ITEM_LIGHT_JO_STAFF:
+				case ITEM_NUNCHAKU_OF_DESTRUCTION:
+				case ITEM_NUNCHAKU_OF_ENLIGHTENMENT:
+				case ITEM_SIMPLE_JO_STAFF:
+					return CONST_ME_MONK_STAFF_ATTACK;
+
+				// Dagger weapons
+				case ITEM_AMBER_KUSARIGAMA:
+				case ITEM_CRUDE_UMBRAL_KATAR:
+				case ITEM_FALCON_SAI:
+				case ITEM_NAGA_KATAR:
+				case ITEM_SAI_OF_ENLIGHTENMENT:
+				case ITEM_SAI:
+				case ITEM_SOULKAMAS:
+				case ITEM_TRADITIONAL_SAI:
+				case ITEM_UMBRAL_KATAR:
+				case ITEM_MASTER_UMBRAL_KATAR:
+					return CONST_ME_MONK_DAGGERS_ATTACK;
+				default:
+					return CONST_ME_FIST_ATTACK;
+			}
+		}
+
+		default:
+			return CONST_ME_NONE;
+	}
+}
+
 void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int32_t damageModifier) const
 {
+	WeaponType_t weaponType = item ? item->getWeaponType() : WEAPON_FIST;
+
+	if (weaponType == WEAPON_SWORD || weaponType == WEAPON_CLUB ||
+		weaponType == WEAPON_AXE   || weaponType == WEAPON_FIST)
+	{
+		g_game.addMagicEffect(target->getPosition(), getWeaponAttackEffect(item), target->getInstanceID());
+	}
+
 	if (scripted) {
 		LuaVariant var;
 		var.setNumber(target->getID());
 		executeUseWeapon(player, var);
 	} else {
 		CombatDamage damage;
-		WeaponType_t weaponType = item->getWeaponType();
 		if (weaponType == WEAPON_AMMO || weaponType == WEAPON_DISTANCE) {
 			damage.origin = ORIGIN_RANGED;
 		} else if (weaponType == WEAPON_WAND) {
@@ -286,6 +366,9 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 		damage.secondary.type = getElementType();
 		damage.secondary.value = (getElementDamage(player, target, item) * damageModifier) / 100;
 
+		CombatDamage cleaveSnapshot = damage;
+		uint32_t targetId = target->getID();
+
 		if (player->checkChainSystem()) {
 			auto chainCombat = std::make_shared<Combat>();
 			chainCombat->setupChain(g_weapons->getWeapon(item));
@@ -295,6 +378,19 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Creature* target, int
 		} else {
 			Combat::doTargetCombat(player, target, damage, params);
 		}
+
+		if (player->checkCleaveSystem() && damage.origin == ORIGIN_MELEE) {
+			uint32_t cleavePercent = getCleavePercent();
+			if (weaponType == WEAPON_FIST && cleavePercent == 0) {
+				cleavePercent = Combat::getCleaveFistPercent();
+			} else if (cleavePercent == 0) {
+				cleavePercent = Combat::getCleaveDefaultPercent();
+			}
+			if (cleavePercent > 0) {
+				Combat::doCombatCleave(player, targetId, cleaveSnapshot, params, cleavePercent);
+			}
+		}
+
 		if (item->hasImbuements()) {
 			int32_t basePhysDamage = std::abs(damage.primary.value);
 			if (basePhysDamage > 0) {
@@ -334,7 +430,7 @@ void Weapon::internalUseWeapon(Player* player, Item* item, Tile* tile) const
 		executeUseWeapon(player, var);
 	} else {
 		Combat::postCombatEffects(player, tile->getPosition(), params);
-		g_game.addMagicEffect(tile->getPosition(), CONST_ME_POFF);
+		g_game.addMagicEffect(tile->getPosition(), CONST_ME_POFF, player->getInstanceID());
 	}
 
 	onUsedWeapon(player, item, tile);

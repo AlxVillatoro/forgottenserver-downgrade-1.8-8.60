@@ -91,7 +91,13 @@ void DatabaseManager::updateDatabase()
 
 	int32_t version = getDatabaseVersion();
 	do {
-		if (luaL_dofile(L, fmt::format("data/migrations/{:d}.lua", version).c_str()) != 0) {
+		const std::string migrationFile = fmt::format("data/migrations/{:d}.lua", version);
+		if (!std::filesystem::exists(migrationFile)) {
+			g_logger().info("No database migration file found for version {}; database is up to date.", version);
+			break;
+		}
+
+		if (luaL_dofile(L, migrationFile.c_str()) != 0) {
 			g_logger().error("{}", lua_tostring(L, -1));
 			break;
 		}

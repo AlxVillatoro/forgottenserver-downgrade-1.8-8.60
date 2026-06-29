@@ -94,6 +94,19 @@ networkThreads = 2
 connectionRateLimitAllowed = 10
 connectionRateLimitMS = 500
 
+-- Reactor Limits Config
+-- WARNING: reactorMaxTasksPerCycle = 0 means unlimited; use only on dedicated hardware with controlled workloads
+-- NOTE: reactorTimeBudgetMS: max time in ms per cycle (0 = unlimited, max = 1000)
+-- NOTE: reactorMaxInboxSize: max queued tasks before dropping new ones (min = 1, max = 10000000)
+--
+-- Presets:
+--   Low    (small VPS / few players):   250 / 3  / 50000
+--   Normal (moderate load):             500 / 5  / 100000
+--   High   (default / heavy load):      1000 / 25 / 200000
+reactorMaxTasksPerCycle = 1000
+reactorTimeBudgetMS = 25
+reactorMaxInboxSize = 200000
+
 -- Deaths
 -- NOTE: Leave deathLosePercent as -1 if you want to use the default
 -- death penalty formula. For the old formula, set it to 10. For
@@ -132,14 +145,47 @@ wheelSystemEnabled = false
 bestiarySystemEnabled = false
 marketSystemEnabled = false
 preySystemEnabled = false
+battlePassSystemEnabled = false
 weaponProficiencySystemEnabled = false
 augmentSystemEnabled = false
 monsterLevelEnabled = false
+monsterFactionSystem = false
+monsterFactionRequirePlayerNearby = true
+monsterFactionPreferPlayers = true
 enableColorizedLootValue = false
 enableItemTierDisplay = false
 enableItemUpgradeClassification = false
 enableQuickLoot = false
 quickLootMaxCorpses = 30
+
+-- Character Bazaar (accounts.tibia_coins is the transferable coin balance)
+characterBazaarEnabled = false
+characterBazaarMinLevel = 50
+characterBazaarMinPrice = 100
+characterBazaarAuctionFee = 50
+characterBazaarCommissionPercent = 10
+characterBazaarMinDurationHours = 24
+characterBazaarMaxDurationDays = 7
+
+-- Enable Task Hunt / Task Board system.
+-- Requires compatible AstraClient/OTCv8 support.
+-- Default: false keeps classic 8.60 behaviour.
+taskHuntingSystemEnabled = false
+
+-- Enable Bounty Tasks inside Task Board.
+-- Requires taskHuntingSystemEnabled.
+bountyTasksEnabled = false
+
+-- Enable Weekly Tasks inside Task Board.
+-- Requires taskHuntingSystemEnabled.
+weeklyTasksEnabled = false
+
+-- Enable Soulpit arena / soul core system.
+soulpitSystemEnabled = false
+
+-- Enable Soulseals resource/window.
+-- Requires weeklyTasksEnabled or proper source of soulseals.
+soulsealsSystemEnabled = false
 
 -- Stress test: runs reactor stress tests
 -- For use test only says: /stress_reactor
@@ -284,7 +330,7 @@ allowChangeOutfit = true
 freePremium = false
 kickIdlePlayerAfterMinutes = 15
 maxMessageBuffer = 4
-emoteSpells = true
+emoteSpells = false
 classicEquipmentSlots = true
 classicAttackSpeed = false
 showScriptsLogInConsole = false
@@ -473,6 +519,11 @@ staminaTrainerGain = 1
 defaultPriority = "high"
 startupDatabaseOptimization = false
 
+-- Logging
+-- logToFile: true = save logs to data/logs/server.log, false = console only (default: false)
+logToFile = false
+-- logLevel: trace, debug, info, warning, error, critical (default: info)
+logLevel = "info"
 -- Status Server Information
 ownerName = ""
 ownerEmail = ""
@@ -512,3 +563,9 @@ combatChainSkillFormulaSword = 1.1
 combatChainSkillFormulaFist = 1.0
 combatChainSkillFormulaDistance = 0.9
 combatChainSkillFormulaWandsAndRods = 1.0
+
+-- Cleave System
+-- Cleave allows melee attacks to deal area damage to monsters around the player.
+-- Enabled by default for Knights, Elite Knights, Monks, and Exalted Monks.
+-- Turn on/off per player via !cleave talkaction.
+-- Cleave percentage and fist percentage are configured in data/server_config.lua (cleaveDefaultPercent / cleaveFistPercent)

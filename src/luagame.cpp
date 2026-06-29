@@ -632,7 +632,7 @@ int luaGameCreateItem(lua_State* L)
 		if (item->isStackable()) {
 			int32_t destinationIndex = INDEX_WHEREEVER;
 			uint32_t addFlags = FLAG_NOLIMIT;
-			tile->queryDestination(destinationIndex, *item, &mergedItem, addFlags);
+			tile->queryDestination(destinationIndex, *item, &mergedItem, addFlags, item->getInstanceID());
 			if (!(mergedItem && mergedItem->equals(item) && mergedItem->getItemCount() < mergedItem->getStackSize())) {
 				mergedItem = nullptr;
 			}
@@ -749,12 +749,11 @@ int luaGameCreateMonster(lua_State* L)
 int luaGameCreateNpc(lua_State* L)
 {
 	// Game.createNpc(npcName, position[, extended = false[, force = false[, magicEffect = CONST_ME_TELEPORT[, instanceId = 0]]]])
-	auto npcUnique = Npc::createNpc(getString(L, 1));
-	if (!npcUnique) {
+	auto npc = Npc::createNpc(getString(L, 1));
+	if (!npc) {
 		lua_pushnil(L);
 		return 1;
 	}
-	std::shared_ptr<Npc> npc(std::move(npcUnique));
 
 	const Position& position = getPosition(L, 2);
 	bool extended = getBoolean(L, 3, false);
@@ -961,7 +960,7 @@ int luaGameReload(lua_State* L)
 	// Game.reload(reloadType)
 	ReloadTypes_t reloadType = getInteger<ReloadTypes_t>(L, 1);
 	if (reloadType == RELOAD_TYPE_GLOBAL) {
-		pushBoolean(L, g_luaEnvironment.loadFile("data/global.lua") == 0);
+		pushBoolean(L, g_luaEnvironment.loadFile("data/lib/lib.lua") == 0 && g_luaEnvironment.loadFile("data/anti_advertising.lua") == 0);
 		pushBoolean(L, g_scripts->loadScripts("scripts/lib", true, true));
 		lua_gc(g_luaEnvironment.getLuaState(), LUA_GCCOLLECT, 0);
 		return 2;

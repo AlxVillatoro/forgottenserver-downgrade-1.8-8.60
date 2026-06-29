@@ -183,6 +183,7 @@
     <ClCompile Include="..\src\ban.cpp" />
     <ClCompile Include="..\src\baseevents.cpp" />
     <ClCompile Include="..\src\bed.cpp" />
+    <ClCompile Include="..\src\character_bazaar.cpp" />
     <ClCompile Include="..\src\chat.cpp" />
     <ClCompile Include="..\src\combat.cpp" />
     <ClCompile Include="..\src\condition.cpp" />
@@ -218,6 +219,7 @@
     <ClCompile Include="..\src\kv\value_wrapper.cpp" />
     <ClCompile Include="..\src\logger.cpp" />
     <ClCompile Include="..\src\luaactions.cpp" />
+    <ClCompile Include="..\src\luachatchannel.cpp" />
     <ClCompile Include="..\src\luacombat.cpp" />
     <ClCompile Include="..\src\luacondition.cpp" />
     <ClCompile Include="..\src\luacontainer.cpp" />
@@ -321,16 +323,18 @@
     <ClInclude Include="..\src\actions.h" />
     <ClInclude Include="..\src\admin.h" />
     <ClInclude Include="..\src\astraclient.h" />
+    <ClInclude Include="..\src\fonticakclient.h" />
     <ClInclude Include="..\src\ban.h" />
     <ClInclude Include="..\src\baseevents.h" />
     <ClInclude Include="..\src\bed.h" />
+    <ClInclude Include="..\src\character_bazaar.h" />
     <ClInclude Include="..\src\chat.h" />
     <ClInclude Include="..\src\combat.h" />
     <ClInclude Include="..\src\condition.h" />
     <ClInclude Include="..\src\configmanager.h" />
     <ClInclude Include="..\src\connection.h" />
-    <ClInclude Include="..\src\const.h" />
     <ClInclude Include="..\src\container.h" />
+    <ClInclude Include="..\src\const.h" />
     <ClInclude Include="..\src\creature.h" />
     <ClInclude Include="..\src\creatureevent.h" />
     <ClInclude Include="..\src\cylinder.h" />

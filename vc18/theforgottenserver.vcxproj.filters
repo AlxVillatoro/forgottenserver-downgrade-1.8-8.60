@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="..\src\actions.cpp" />
@@ -6,6 +6,7 @@
     <ClCompile Include="..\src\ban.cpp" />
     <ClCompile Include="..\src\baseevents.cpp" />
     <ClCompile Include="..\src\bed.cpp" />
+    <ClCompile Include="..\src\character_bazaar.cpp" />
     <ClCompile Include="..\src\chat.cpp" />
     <ClCompile Include="..\src\combat.cpp" />
     <ClCompile Include="..\src\condition.cpp" />
@@ -101,6 +102,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\src\luaactions.cpp">
+      <Filter>Lua Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\luachatchannel.cpp">
       <Filter>Lua Modules</Filter>
     </ClCompile>
     <ClCompile Include="..\src\luacombat.cpp">
@@ -211,9 +215,11 @@
     <ClInclude Include="..\src\actions.h" />
     <ClInclude Include="..\src\admin.h" />
     <ClInclude Include="..\src\astraclient.h" />
+    <ClInclude Include="..\src\fonticakclient.h" />
     <ClInclude Include="..\src\ban.h" />
     <ClInclude Include="..\src\baseevents.h" />
     <ClInclude Include="..\src\bed.h" />
+    <ClInclude Include="..\src\character_bazaar.h" />
     <ClInclude Include="..\src\chat.h" />
     <ClInclude Include="..\src\combat.h" />
     <ClInclude Include="..\src\condition.h" />

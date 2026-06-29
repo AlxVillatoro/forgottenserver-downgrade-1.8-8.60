@@ -39,6 +39,7 @@ enum LuaDataType
 	LuaData_Condition,
 
 	LuaData_Combat,
+	LuaData_ChatChannel,
 	LuaData_Group,
 	LuaData_Guild,
 	LuaData_House,
@@ -81,6 +82,7 @@ inline constexpr LuaDataType LuaDataTypeByClass = LuaData_Unknown;
 class Action;
 class AreaCombat;
 class Combat;
+class ChatChannel;
 class Condition;
 class Container;
 class Container;
@@ -151,6 +153,7 @@ NEW_LUA_DATA_TYPE(Tile)
 NEW_LUA_DATA_TYPE(Condition)
 
 NEW_LUA_DATA_TYPE(Combat)
+NEW_LUA_DATA_TYPE(ChatChannel)
 NEW_LUA_DATA_TYPE(Group)
 NEW_LUA_DATA_TYPE(Guild)
 NEW_LUA_DATA_TYPE(House)
@@ -248,6 +251,7 @@ public:
 	Npc* getNpc() const { return curNpc; }
 
 	Thing* getThingByUID(uint32_t uid);
+	Creature* getCreatureByUID(uint32_t uid);
 	Item* getItemByUID(uint32_t uid);
 	Container* getContainerByUID(uint32_t uid);
 	void removeItemByUID(uint32_t uid);
@@ -269,6 +273,7 @@ public:
 
 	// local item map
 	std::unordered_map<uint32_t, ObserverPtr<Item>> localMap; // items managed by tempItems
+	std::vector<std::shared_ptr<Creature>> localCreatureRefs;
 	uint32_t lastUID = std::numeric_limits<uint16_t>::max();
 
 	// script file id
@@ -335,6 +340,8 @@ public:
 		assert(scriptEnvIndex >= 0 && scriptEnvIndex < 16);
 		return scriptEnv + scriptEnvIndex;
 	}
+
+	static bool hasScriptEnv() { return scriptEnvIndex >= 0 && scriptEnvIndex < 16; }
 
 	static bool reserveScriptEnv() { return ++scriptEnvIndex < 16; }
 
@@ -428,6 +435,7 @@ protected:
 	void registerHouse();
 	void registerItemType();
 	void registerCombat();
+	void registerChatChannel();
 	void registerCondition();
 	void registerOutfit();
 	void registerMonsterType();
@@ -1047,7 +1055,7 @@ void pushBoolean(lua_State* L, bool value);
 void pushCombatDamage(lua_State* L, const CombatDamage& damage);
 void pushInstantSpell(lua_State* L, const InstantSpell& spell);
 void pushSpell(lua_State* L, const Spell& spell);
-void pushPosition(lua_State* L, const Position& position, int32_t stackpos = 0);
+void pushPosition(lua_State* L, const Position& position, int32_t stackpos = 0, uint32_t instanceId = 0);
 void pushOutfit(lua_State* L, const Outfit_t& outfit);
 void pushOutfit(lua_State* L, const Outfit* outfit);
 void pushMount(lua_State* L, const Mount* mount);

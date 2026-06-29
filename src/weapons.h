@@ -54,6 +54,7 @@ class Weapon : public Event
 {
 public:
 	explicit Weapon(LuaScriptInterface* interface) : Event(interface) {}
+	uint16_t getWeaponAttackEffect(const Item* item) const;
 
 	virtual void configureWeapon(const ItemType& it);
 	virtual bool interruptSwing() const { return false; }
@@ -130,13 +131,16 @@ public:
 
 	WeaponAction_t action = WEAPONACTION_NONE;
 	CombatParams params;
-	WeaponType_t weaponType;
+	WeaponType_t weaponType = WEAPON_NONE;
 	std::unordered_set<uint16_t> vocationWeaponSet;
 
 	void setChainSkillValue(double value) { m_chainSkillValue = value; }
 	double getChainSkillValue() const { return m_chainSkillValue; }
 	void setDisabledChain() { m_isDisabledChain = true; }
 	bool isChainDisabled() const { return m_isDisabledChain; }
+
+	void setCleavePercent(uint32_t percent) { cleavePercent = percent; }
+	uint32_t getCleavePercent() const { return cleavePercent; }
 
 protected:
 	void internalUseWeapon(Player* player, Item* item, Creature* target, int32_t damageModifier) const;
@@ -167,6 +171,7 @@ private:
 
 	double m_chainSkillValue = 0.0;
 	bool m_isDisabledChain = false;
+	uint32_t cleavePercent = 0;
 
 	std::string_view getScriptEventName() const override final;
 

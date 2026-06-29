@@ -81,7 +81,8 @@ public:
 	 * this method can modify the flags
 	 * \returns Cylinder returns the destination cylinder
 	 */
-	virtual Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags) = 0;
+	virtual Cylinder* queryDestination(int32_t& index, const Thing& thing, Item** destItem, uint32_t& flags,
+	                                   uint32_t destinationInstanceId) = 0;
 
 	/**
 	 * Add the object to the cylinder
@@ -103,6 +104,12 @@ public:
 	 * \param count is the new count value
 	 */
 	virtual void updateThing(Thing* thing, uint16_t itemId, uint32_t count) = 0;
+
+	/**
+	 * Notify observers that an item's runtime state changed without changing its
+	 * id or subtype. Cylinders that expose items to clients override this.
+	 */
+	virtual void refreshThing(Thing*) {}
 
 	/**
 	 * Replace an object with a new
@@ -207,7 +214,9 @@ public:
 	{
 		return RETURNVALUE_NOTPOSSIBLE;
 	}
-	virtual Cylinder* queryDestination(int32_t&, const Thing&, Item**, uint32_t&) override { return nullptr; }
+	virtual Cylinder* queryDestination(int32_t&, const Thing&, Item**, uint32_t&, uint32_t) override {
+		return nullptr;
+	}
 
 	virtual void addThing(Thing*) override {}
 	virtual void addThing(int32_t, Thing*) override {}

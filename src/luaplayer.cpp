@@ -474,7 +474,7 @@ int luaPlayerAddConditionSuppressions(lua_State* L)
 	// player:addConditionSuppressions(conditions)
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
-		player->addConditionSuppressions(getInteger<uint32_t>(L, 2));
+		player->addConditionSuppressions(getInteger<uint64_t>(L, 2));
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);
@@ -487,7 +487,7 @@ int luaPlayerRemoveConditionSuppressions(lua_State* L)
 	// player:removeConditionSuppressions(conditions)
 	Player* player = getUserdata<Player>(L, 1);
 	if (player) {
-		player->removeConditionSuppressions(getInteger<uint32_t>(L, 2));
+		player->removeConditionSuppressions(getInteger<uint64_t>(L, 2));
 		pushBoolean(L, true);
 	} else {
 		lua_pushnil(L);
@@ -1497,6 +1497,249 @@ int luaPlayerSetBankBalance(lua_State* L)
 	}
 
 	player->setBankBalance(balance);
+	pushBoolean(L, true);
+	return 1;
+}
+
+// Task Hunting Points
+int luaPlayerGetTaskHuntingPoints(lua_State* L)
+{
+	// player:getTaskHuntingPoints()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, player->getTaskHuntingPoints());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetTaskHuntingPoints(lua_State* L)
+{
+	// player:setTaskHuntingPoints(points)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	int64_t points = getInteger<int64_t>(L, 2);
+	if (points < 0) {
+		reportErrorFunc(L, "Task hunting points value must be non-negative.");
+		lua_pushnil(L);
+		return 1;
+	}
+	player->setTaskHuntingPoints(static_cast<uint64_t>(points));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddTaskHuntingPoints(lua_State* L)
+{
+	// player:addTaskHuntingPoints(points)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	int64_t points = getInteger<int64_t>(L, 2);
+	if (points < 0) {
+		reportErrorFunc(L, "Task hunting points value must be non-negative.");
+		lua_pushnil(L);
+		return 1;
+	}
+	player->addTaskHuntingPoints(static_cast<uint64_t>(points));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerRemoveTaskHuntingPoints(lua_State* L)
+{
+	// player:removeTaskHuntingPoints(points)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	int64_t points = getInteger<int64_t>(L, 2);
+	if (points < 0) {
+		reportErrorFunc(L, "Task hunting points value must be non-negative.");
+		lua_pushnil(L);
+		return 1;
+	}
+	pushBoolean(L, player->removeTaskHuntingPoints(static_cast<uint64_t>(points)));
+	return 1;
+}
+
+// Bounty Task Points
+int luaPlayerGetBountyPoints(lua_State* L)
+{
+	// player:getBountyPoints()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, player->getBountyPoints());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetBountyPoints(lua_State* L)
+{
+	// player:setBountyPoints(points)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	int64_t bountyPoints = getInteger<int64_t>(L, 2);
+	if (bountyPoints < 0) {
+		reportErrorFunc(L, "Bounty points value must be non-negative.");
+		lua_pushnil(L);
+		return 1;
+	}
+	player->setBountyPoints(static_cast<uint64_t>(bountyPoints));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddBountyPoints(lua_State* L)
+{
+	// player:addBountyPoints(points)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	int64_t points = getInteger<int64_t>(L, 2);
+	if (points < 0) {
+		reportErrorFunc(L, "Bounty points value must be non-negative.");
+		lua_pushnil(L);
+		return 1;
+	}
+	player->addBountyPoints(static_cast<uint64_t>(points));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerRemoveBountyPoints(lua_State* L)
+{
+	// player:removeBountyPoints(points)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	int64_t points = getInteger<int64_t>(L, 2);
+	if (points < 0) {
+		reportErrorFunc(L, "Bounty points value must be non-negative.");
+		lua_pushnil(L);
+		return 1;
+	}
+	pushBoolean(L, player->removeBountyPoints(static_cast<uint64_t>(points)));
+	return 1;
+}
+
+// Soulseals Points
+int luaPlayerGetSoulsealsPoints(lua_State* L)
+{
+	// player:getSoulsealsPoints()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		lua_pushinteger(L, player->getSoulsealsPoints());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetSoulsealsPoints(lua_State* L)
+{
+	// player:setSoulsealsPoints(points)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	int64_t soulsealsPoints = getInteger<int64_t>(L, 2);
+	if (soulsealsPoints < 0) {
+		reportErrorFunc(L, "Soulseals points value must be non-negative.");
+		lua_pushnil(L);
+		return 1;
+	}
+	player->setSoulsealsPoints(static_cast<uint64_t>(soulsealsPoints));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerAddSoulsealsPoints(lua_State* L)
+{
+	// player:addSoulsealsPoints(points)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	int64_t points = getInteger<int64_t>(L, 2);
+	if (points < 0) {
+		reportErrorFunc(L, "Soulseals points value must be non-negative.");
+		lua_pushnil(L);
+		return 1;
+	}
+	player->addSoulsealsPoints(static_cast<uint64_t>(points));
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerRemoveSoulsealsPoints(lua_State* L)
+{
+	// player:removeSoulsealsPoints(points)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	int64_t points = getInteger<int64_t>(L, 2);
+	if (points < 0) {
+		reportErrorFunc(L, "Soulseals points value must be non-negative.");
+		lua_pushnil(L);
+		return 1;
+	}
+	pushBoolean(L, player->removeSoulsealsPoints(static_cast<uint64_t>(points)));
+	return 1;
+}
+
+// Weekly Expansion
+int luaPlayerHasWeeklyExpansion(lua_State* L)
+{
+	// player:hasWeeklyExpansion()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (player) {
+		pushBoolean(L, player->hasWeeklyExpansion());
+	} else {
+		lua_pushnil(L);
+	}
+	return 1;
+}
+
+int luaPlayerSetWeeklyExpansion(lua_State* L)
+{
+	// player:setWeeklyExpansion(has)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->setWeeklyExpansion(getBoolean(L, 2));
 	pushBoolean(L, true);
 	return 1;
 }
@@ -3096,6 +3339,62 @@ int luaPlayerSetExperienceRate(lua_State* L)
 	return 1;
 }
 
+int luaPlayerGetXpBoostPercent(lua_State* L)
+{
+	// player:getXpBoostPercent()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, player->getXpBoostPercent());
+	return 1;
+}
+
+int luaPlayerSetXpBoostPercent(lua_State* L)
+{
+	// player:setXpBoostPercent(percent)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->setXpBoostPercent(getInteger<int32_t>(L, 2));
+	player->sendStats();
+	pushBoolean(L, true);
+	return 1;
+}
+
+int luaPlayerGetXpBoostTime(lua_State* L)
+{
+	// player:getXpBoostTime()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	lua_pushinteger(L, player->getXpBoostTime());
+	return 1;
+}
+
+int luaPlayerSetXpBoostTime(lua_State* L)
+{
+	// player:setXpBoostTime(timeLeft)
+	Player* player = getUserdata<Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->setXpBoostTime(getInteger<uint16_t>(L, 2));
+	player->sendStats();
+	pushBoolean(L, true);
+	return 1;
+}
+
 int luaPlayerIsUsingOtcV8(lua_State* L)
 {
 	// player:isUsingOtcV8()
@@ -3119,6 +3418,19 @@ int luaPlayerIsUsingAstraClient(lua_State* L)
 	}
 
 	pushBoolean(L, player->isAstraClient());
+	return 1;
+}
+
+int luaPlayerIsUsingFonticakClient(lua_State* L)
+{
+	// player:isUsingFonticakClient()
+	const Player* player = getUserdata<const Player>(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	pushBoolean(L, player->isFonticakClient());
 	return 1;
 }
 
@@ -4204,6 +4516,7 @@ int LuaScriptInterface::luaPlayerSendCastChannelMessage(lua_State* L)
 }
 
 int luaPlayerKV(lua_State* L);
+int luaPlayerResetCachedSettings(lua_State* L);
 
 void LuaScriptInterface::registerPlayer()
 {
@@ -4335,6 +4648,24 @@ void LuaScriptInterface::registerPlayer()
 
 	registerMethod("Player", "getBankBalance", luaPlayerGetBankBalance);
 	registerMethod("Player", "setBankBalance", luaPlayerSetBankBalance);
+
+	registerMethod("Player", "getTaskHuntingPoints", luaPlayerGetTaskHuntingPoints);
+	registerMethod("Player", "setTaskHuntingPoints", luaPlayerSetTaskHuntingPoints);
+	registerMethod("Player", "addTaskHuntingPoints", luaPlayerAddTaskHuntingPoints);
+	registerMethod("Player", "removeTaskHuntingPoints", luaPlayerRemoveTaskHuntingPoints);
+
+	registerMethod("Player", "getBountyPoints", luaPlayerGetBountyPoints);
+	registerMethod("Player", "setBountyPoints", luaPlayerSetBountyPoints);
+	registerMethod("Player", "addBountyPoints", luaPlayerAddBountyPoints);
+	registerMethod("Player", "removeBountyPoints", luaPlayerRemoveBountyPoints);
+
+	registerMethod("Player", "getSoulsealsPoints", luaPlayerGetSoulsealsPoints);
+	registerMethod("Player", "setSoulsealsPoints", luaPlayerSetSoulsealsPoints);
+	registerMethod("Player", "addSoulsealsPoints", luaPlayerAddSoulsealsPoints);
+	registerMethod("Player", "removeSoulsealsPoints", luaPlayerRemoveSoulsealsPoints);
+
+	registerMethod("Player", "hasWeeklyExpansion", luaPlayerHasWeeklyExpansion);
+	registerMethod("Player", "setWeeklyExpansion", luaPlayerSetWeeklyExpansion);
 
 	registerMethod("Player", "addItem", luaPlayerAddItem);
 	registerMethod("Player", "addItemEx", luaPlayerAddItemEx);
@@ -4469,9 +4800,14 @@ void LuaScriptInterface::registerPlayer()
 
 	registerMethod("Player", "getExperienceRate", luaPlayerGetExperienceRate);
 	registerMethod("Player", "setExperienceRate", luaPlayerSetExperienceRate);
+	registerMethod("Player", "getXpBoostPercent", luaPlayerGetXpBoostPercent);
+	registerMethod("Player", "setXpBoostPercent", luaPlayerSetXpBoostPercent);
+	registerMethod("Player", "getXpBoostTime", luaPlayerGetXpBoostTime);
+	registerMethod("Player", "setXpBoostTime", luaPlayerSetXpBoostTime);
 
 	registerMethod("Player", "isUsingOtcV8", luaPlayerIsUsingOtcV8);
 	registerMethod("Player", "isUsingAstraClient", luaPlayerIsUsingAstraClient);
+	registerMethod("Player", "isUsingFonticakClient", luaPlayerIsUsingFonticakClient);
 	registerMethod("Player", "isUsingOtc", luaPlayerIsUsingOtc);
 	registerMethod("Player", "getLastIp", luaPlayerGetLastIp);
 
@@ -4557,6 +4893,7 @@ void LuaScriptInterface::registerPlayer()
 
 	// KV
 	registerMethod("Player", "kv", luaPlayerKV);
+	registerMethod("Player", "resetCachedSettings", luaPlayerResetCachedSettings);
 
 	// OfflinePlayer
 	registerClass("OfflinePlayer", "Player", luaOfflinePlayerCreate);
@@ -4575,5 +4912,18 @@ int luaPlayerKV(lua_State* L) {
 	auto scoped = KVStore::getInstance().scoped("player")->scoped(fmt::format("{}", player->getGUID()));
 	LuaScriptInterface::pushSharedPtrCopy(L, scoped);
 	Lua::setMetatable(L, -1, "KV");
+	return 1;
+}
+
+int luaPlayerResetCachedSettings(lua_State* L) {
+	// player:resetCachedSettings()
+	Player* player = Lua::getPlayer(L, 1);
+	if (!player) {
+		lua_pushnil(L);
+		return 1;
+	}
+
+	player->resetCachedSettings();
+	pushBoolean(L, true);
 	return 1;
 }

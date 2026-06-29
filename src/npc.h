@@ -58,7 +58,7 @@ private:
 class NpcEventsHandler
 {
 public:
-	NpcEventsHandler(const std::string& file, Npc* npc);
+	NpcEventsHandler(const std::string& file, const std::shared_ptr<Npc>& npc);
 	NpcEventsHandler();
 	~NpcEventsHandler();
 
@@ -152,6 +152,7 @@ NpcScriptInterface* getScriptInterface();
 std::shared_ptr<Npc> makeScriptHandle(Npc* npc);
 static const int32_t ViewportX = 15 * 2 + 2; // Approximate or use Map constants if available
 static const int32_t ViewportY = 11 * 2 + 2;
+static constexpr int32_t TalkRadius = 3;
 } // namespace Npcs
 
 class Npc final : public Creature
@@ -181,7 +182,7 @@ public:
 	void removeList() override;
 	void addList() override;
 
-	static std::unique_ptr<Npc> createNpc(const std::string& name);
+	static std::shared_ptr<Npc> createNpc(const std::string& name);
 
 	bool canSee(const Position& pos) const override;
 
@@ -227,7 +228,7 @@ public:
 
 	uint8_t getSpeechBubble() const { return speechBubble; }
 	void setSpeechBubble(const uint8_t bubble) { 
-		if (bubble < SPEECHBUBBLE_LAST) {
+		if (bubble <= SPEECHBUBBLE_QUESTTRADER || bubble == SPEECHBUBBLE_HIRELING) {
 			speechBubble = bubble;
 		}
 	}

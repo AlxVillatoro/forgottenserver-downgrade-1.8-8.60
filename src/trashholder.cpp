@@ -25,7 +25,7 @@ ReturnValue TrashHolder::queryRemove(const Thing&, uint32_t, uint32_t, Creature*
 	return RETURNVALUE_NOTPOSSIBLE;
 }
 
-Cylinder* TrashHolder::queryDestination(int32_t&, const Thing&, Item**, uint32_t&) { return this; }
+Cylinder* TrashHolder::queryDestination(int32_t&, const Thing&, Item**, uint32_t&, uint32_t) { return this; }
 
 void TrashHolder::addThing(Thing* thing) { return addThing(0, thing); }
 
@@ -51,7 +51,7 @@ void TrashHolder::addThing(int32_t, Thing* thing)
 	g_game.internalRemoveItem(item);
 
 	if (it.magicEffect != CONST_ME_NONE) {
-		g_game.addMagicEffect(getPosition(), it.magicEffect);
+		g_game.addMagicEffect(getPosition(), it.magicEffect, getInstanceID());
 	}
 }
 

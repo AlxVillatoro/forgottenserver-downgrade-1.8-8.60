@@ -254,7 +254,7 @@ uint64_t Item::getItemUID() const noexcept
 	if (!attributes) [[unlikely]] {
 		return 0;
 	}
-	const auto* attr = const_cast<Item*>(this)->getCustomAttribute("__uid");
+	const auto* attr = getCustomAttribute("__uid");
 	if (!attr) [[unlikely]] {
 		return 0;
 	}
@@ -298,11 +298,16 @@ std::shared_ptr<Item> Item::clone() const
 
 bool Item::equals(const Item* otherItem) const
 {
-	if (!otherItem || id != otherItem->id) {
+	if (!otherItem || getInstanceID() != otherItem->getInstanceID()) {
 		return false;
 	}
 
-	if (getInstanceID() != otherItem->getInstanceID()) {
+	return equalsIgnoringInstance(otherItem);
+}
+
+bool Item::equalsIgnoringInstance(const Item* otherItem) const
+{
+	if (!otherItem || id != otherItem->id) {
 		return false;
 	}
 
@@ -367,7 +372,11 @@ void Item::setID(uint16_t newid)
 	id = newid;
 
 	const ItemType& it = Item::items[newid];
-	uint32_t newDuration = normal_random(it.decayTimeMin, it.decayTimeMax) * 1000;
+	uint32_t newDuration = it.decayTimeMin;
+	if (it.decayTimeMax != 0) {
+		newDuration = normal_random(newDuration, it.decayTimeMax);
+	}
+	newDuration *= 1000;
 
 	if (newDuration == 0 && !it.stopTime && it.decayTo < 0) {
 	//We'll get called startDecay anyway so let's schedule it - actually not in all casses
@@ -1737,7 +1746,7 @@ std::vector<std::shared_ptr<Imbuement>>& Item::getImbuements() {
 	return imbuements;
 }
 
-bool Item::decayImbuements(bool infight) {
+bool Item::decayImbuements(bool /*infight*/) {
 	if (!ConfigManager::getBoolean(ConfigManager::IMBUEMENT_SYSTEM_ENABLED)) {
 		return false;
 	}
@@ -1745,24 +1754,16 @@ bool Item::decayImbuements(bool infight) {
 	bool decayed = false;
 	std::vector<std::shared_ptr<Imbuement>> expired;
 	for (auto& imbue : imbuements) {
-		if (imbue->isEquipDecay()) {
-			if (imbue->duration > 0) {
-				imbue->duration -= 1;
-				decayed = true;
-			}
-			if (imbue->duration == 0) {
-				expired.push_back(imbue);
-				continue;
-			}
+		if (!imbue->isEquipDecay() && !imbue->isInfightDecay()) {
+			continue;
 		}
-		if (imbue->isInfightDecay() && infight) {
-			if (imbue->duration > 0) {
-				imbue->duration -= 1;
-				decayed = true;
-			}
-			if (imbue->duration == 0) {
-				expired.push_back(imbue);
-			}
+
+		if (imbue->duration > 0) {
+			imbue->duration -= 1;
+			decayed = true;
+		}
+		if (imbue->duration == 0) {
+			expired.push_back(imbue);
 		}
 	}
 	for (auto& imbue : expired) {
